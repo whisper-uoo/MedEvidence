@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="evidence.css">
   <link rel="stylesheet" href="navigation.css">
+  <link rel="stylesheet" href="literature.css">
   <script type="module" src="search.js"></script>
 </head>
 <body>
@@ -94,38 +95,49 @@
 
       <section id="literature" aria-labelledby="browse-title" hidden>
         <header class="page-heading"><h1 id="browse-title">文献检索</h1><p>筛选 PubMed 候选文献，快速判断是否值得精读。</p></header>
-        <div class="papers-page">
-          <form class="paper-search-row" id="browse-search">
-            <input id="browse-query" aria-label="研究问题" maxlength="1000" required placeholder="输入研究问题">
+        <div class="papers-page literature-workspace">
+          <form class="paper-search-row literature-search" id="browse-search">
+            <input id="browse-query" aria-label="研究问题" maxlength="1000" required placeholder="输入研究问题或 PubMed 关键词">
             <button class="paper-search-button" id="browse-search-button" type="submit">搜索</button>
             <a class="detail-back" href="#question">高级检索</a>
           </form>
-          <div class="papers-grid" id="browse-grid">
-            <aside class="paper-filters" aria-labelledby="facet-title">
-              <div class="filter-heading"><strong id="facet-title">筛选</strong><button type="button" id="reset-filters">重置</button></div>
-              <div class="filter-group">
-                <h2>文献类型</h2>
-                <select id="publication-type" aria-label="文献类型">
+
+          <section class="literature-intro" id="literature-intro" aria-labelledby="literature-examples-title">
+            <h2 id="literature-examples-title">试一个研究问题</h2>
+            <p>支持中文研究问题、英文关键词和 PubMed 检索式。结果来自 PubMed。</p>
+            <div class="literature-examples">
+              <button type="button" class="detail-back browse-example">睡眠不足是否影响大学生记忆能力</button>
+              <button type="button" class="detail-back browse-example">二甲双胍对 2 型糖尿病患者的效果？</button>
+              <button type="button" class="detail-back browse-example">asthma AND inhaled corticosteroids</button>
+            </div>
+          </section>
+          <div class="literature-feedback" id="literature-feedback" hidden>
+            <span class="literature-indicator" aria-hidden="true"></span>
+            <p id="literature-feedback-text" role="status"></p>
+            <button id="literature-retry" type="button" class="detail-back" hidden>重试</button>
+          </div>
+          <details class="literature-facets" id="literature-facets" hidden>
+            <summary>筛选条件 <span id="applied-filters"></span></summary>
+            <div class="literature-facet-fields">
+              <label>文献类型
+                <select id="publication-type">
                   <option value="">全部类型</option><option value="rct">随机对照试验</option>
                   <option value="systematic">系统评价</option><option value="meta">Meta 分析</option>
                   <option value="review">综述</option><option value="clinical">临床试验</option>
                 </select>
+              </label>
+              <label>起始年份<input id="from-year" type="number" min="1500" placeholder="不限"></label>
+              <label>截止年份<input id="to-year" type="number" min="1500" placeholder="不限"></label>
+              <label>每页篇数<select id="page-size"><option>10</option><option>20</option><option>30</option><option>50</option></select></label>
+              <div class="literature-facet-actions">
+                <button type="button" class="detail-back" id="reset-filters">重置</button>
+                <button type="button" class="detail-back primary" id="apply-filters">应用条件</button>
               </div>
-              <div class="filter-group">
-                <h2>发表年份</h2>
-                <div class="year-range">
-                  <label>起始年份<input id="from-year" type="number" min="1500" placeholder="不限"></label>
-                  <label>截止年份<input id="to-year" type="number" min="1500" placeholder="不限"></label>
-                </div>
-              </div>
-              <div class="filter-group">
-                <label>每页篇数<select id="page-size"><option>10</option><option>20</option><option>30</option><option>50</option></select></label>
-                <button type="button" class="detail-secondary" id="apply-filters">应用条件</button>
-              </div>
-            </aside>
-            <section class="paper-results" aria-label="文献结果">
+            </div>
+          </details>
+            <section class="paper-results" id="literature-results" hidden aria-label="文献结果">
               <div class="results-heading">
-                <div><strong id="status" role="status">输入研究问题开始检索。</strong></div>
+                <div><strong id="status"></strong></div>
                 <div class="results-controls" id="filters" hidden>
                   <label for="sort">排序</label>
                   <select id="sort"><option value="bm25">本页 BM25</option><option value="pubmed">PubMed 最佳匹配</option><option value="year">本页发表日期</option><option value="ai" disabled>本页 AI 相关性</option></select>
@@ -143,19 +155,14 @@
                 <button type="button" id="prev">上一页</button><span id="page-label" aria-live="polite"></span><button type="button" id="next">下一页</button>
               </div>
             </section>
-            <aside class="reading-tools" id="reading-tools" aria-labelledby="review-title">
-              <span>阅读工具</span><h2 id="review-title">已选文献</h2>
-              <strong id="selection-count" aria-live="polite"><span id="selected-total">0</span><small> / 10</small></strong>
-              <p>勾选搜索结果左侧的复选框，加入证据分析。</p>
-              <div id="selected"></div>
-              <a href="#review" class="compare-start" id="view-review">进入证据综述</a>
-              <div id="literature-export" class="export-actions" hidden>
-                <button type="button" class="detail-back" id="export-literature-md">Markdown</button>
-                <button type="button" class="detail-back" id="export-literature-bib">BibTeX</button>
-              </div>
-              <button type="button" class="view-favorites" id="clear-selection" hidden>清空选择</button>
-            </aside>
-          </div>
+          <section class="literature-selection" id="literature-selection" aria-label="已选文献操作" hidden>
+            <strong id="literature-selection-count" aria-live="polite"></strong>
+            <div class="literature-selection-actions">
+              <button type="button" class="detail-back" id="clear-literature-selection">清空</button>
+              <a href="#comparison" class="detail-back">证据对比</a>
+              <a href="#review" class="detail-back primary">AI 证据综述</a>
+            </div>
+          </section>
         </div>
       </section>
 
@@ -239,7 +246,19 @@
               <p id="review-status" class="detail-notice review-status" role="status"></p>
               <div id="review-result"></div>
             </section>
-            <div id="review-selection" class="detail-sidebar"></div>
+            <div id="review-selection" class="detail-sidebar">
+            <aside class="reading-tools" id="reading-tools" aria-labelledby="review-title">
+              <span>阅读工具</span><h2 id="review-title">已选文献</h2>
+              <strong id="selection-count" aria-live="polite"><span id="selected-total">0</span><small> / 10</small></strong>
+              <p>管理本次分析所选的文献。</p>
+              <div id="selected"></div>
+              <div id="literature-export" class="export-actions" hidden>
+                <button type="button" class="detail-back" id="export-literature-md">Markdown</button>
+                <button type="button" class="detail-back" id="export-literature-bib">BibTeX</button>
+              </div>
+              <button type="button" class="view-favorites" id="clear-selection" hidden>清空选择</button>
+            </aside>
+            </div>
           </div>
         </div>
       </section>

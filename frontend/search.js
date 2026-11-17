@@ -61,6 +61,9 @@ function renderSelected() {
   byId('clear-selection').hidden = selected.size === 0;
   byId('clear-selection').disabled = reviewing || searching;
   byId('selected-total').textContent = selected.size;
+  byId('literature-selection').hidden = selected.size === 0;
+  byId('literature-selection-count').textContent = `已选 ${selected.size} / 10 篇`;
+  byId('clear-literature-selection').disabled = reviewing || searching;
   byId('literature-export').hidden = selected.size === 0;
   for (const article of selected.values()) {
     const line = element('div');
@@ -309,6 +312,7 @@ function renderResults() {
 function setBusy() {
   const busy = searching || reviewing || reranking;
   for (const id of ['search-button', 'browse-search-button', 'apply-filters', 'reset-filters']) byId(id).disabled = busy;
+  for (const button of document.querySelectorAll('.browse-example')) button.disabled = busy;
   byId('rerank').disabled = busy || !capabilities.semantic || !articles.length || Boolean(semanticOrder);
   byId('prev').disabled = busy || !pageResult || pageResult.page <= 1;
   byId('next').disabled = busy || !pageResult || pageResult.page * pageResult.limit >= pageResult.accessibleTotal;
@@ -324,12 +328,36 @@ function showNotice(message) {
   byId('ranking-status').textContent = message ?? '';
 }
 
+function setLiteratureFeedback(state, message = '', retry) {
+  const feedback = byId('literature-feedback');
+  feedback.dataset.state = state;
+  feedback.hidden = !message;
+  byId('literature-feedback-text').textContent = message;
+  const button = byId('literature-retry');
+  button.hidden = !retry;
+  button.onclick = retry ?? null;
+  byId('literature-intro').hidden = Boolean(pageResult) || state === 'loading';
+  byId('literature-results').setAttribute('aria-busy', String(state === 'loading'));
+}
+
+function showAppliedFilters(request) {
+  const type = [...byId('publication-type').options].find(option => option.value === request.publicationType);
+  const labels = [];
+  if (request.publicationType && type) labels.push(type.textContent);
+  if (request.fromYear != null) labels.push(`自 ${request.fromYear} 年`);
+  if (request.toYear != null) labels.push(`至 ${request.toYear} 年`);
+  labels.push(`每页 ${request.limit} 篇`);
+  byId('applied-filters').textContent = labels.join(' · ');
+}
+
 async function loadPage(request, page, newSearch) {
   if (searching || reviewing || reranking) return;
   searching = true;
   setBusy();
-  status.textContent = '正在检索 PubMed…';
-  homeStatus.textContent = status.textContent;
+  const changedQuestion = question !== request.query;
+  const loadingMessage = pageResult ? '正在更新 PubMed 结果…' : '正在检索 PubMed…';
+  setLiteratureFeedback('loading', loadingMessage);
+  homeStatus.textContent = loadingMessage;
   try {
     const body = await api('/literature/search', { ...request, page }, 75000);
     pageResult = body.data;
@@ -346,7 +374,7 @@ async function loadPage(request, page, newSearch) {
     semanticOrder = null;
     byId('sort').querySelector('[value=ai]').disabled = true;
     if (byId('sort').value === 'ai') byId('sort').value = 'bm25';
-    if (newSearch) {
+    if (changedQuestion) {
       selected.clear();
       currentReview = null;
       renderComparisonRoute();
@@ -358,6 +386,9 @@ async function loadPage(request, page, newSearch) {
       byId('abstract-only').checked = false;
       byId('sort').value = 'bm25';
     }
+    byId('literature-facets').hidden = false;
+    byId('literature-results').hidden = false;
+    showAppliedFilters(lastRequest);
     byId('filters').hidden = !articles.length;
     byId('local-filters').hidden = !articles.length;
     const expression = byId('expression');
@@ -366,7 +397,9 @@ async function loadPage(request, page, newSearch) {
     showNotice(pageResult.rankingNotice);
     status.textContent = articles.length
       ? `匹配 ${pageResult.total.toLocaleString()} 篇 · 本页 ${articles.length} 篇`
-      : body.message;
+      : '本页无文献';
+    setLiteratureFeedback(articles.length ? 'success' : 'empty',
+      articles.length ? '' : 'PubMed 没有返回本页文献。可放宽筛选条件或修改检索问题。');
     const pageCount = Math.max(1, Math.ceil(pageResult.accessibleTotal / pageResult.limit));
     byId('pagination').hidden = pageCount <= 1 && pageResult.page <= 1;
     byId('page-label').textContent = `第 ${pageResult.page} / ${pageCount} 页`;
@@ -375,8 +408,10 @@ async function loadPage(request, page, newSearch) {
     homeStatus.textContent = '';
     if (newSearch && window.location.hash !== '#literature') window.location.hash = 'literature';
   } catch (error) {
-    status.textContent = error.message + (articles.length ? ' 仍显示上一次检索结果。' : '');
-    homeStatus.textContent = status.textContent;
+    const message = error.message + (pageResult ? ' 仍保留上一次检索结果和选择。' : '');
+    setLiteratureFeedback('error', message, error.code === 'ENGLISH_QUERY_REQUIRED' ? null
+      : () => loadPage(request, page, newSearch));
+    homeStatus.textContent = message;
     if (error.code === 'ENGLISH_QUERY_REQUIRED') {
       byId('query').value = request.query;
       byId('english-options').open = true;
@@ -425,6 +460,13 @@ byId('global-search').onsubmit = event => {
   event.preventDefault();
   submitQuickSearch(byId('global-query'));
 };
+for (const example of document.querySelectorAll('.browse-example')) {
+  example.onclick = () => {
+    const input = byId('browse-query');
+    input.value = example.textContent.trim();
+    submitQuickSearch(input);
+  };
+}
 byId('browse-search').onsubmit = event => {
   event.preventDefault();
   submitQuickSearch(byId('browse-query'));
@@ -450,7 +492,14 @@ byId('apply-filters').onclick = () => {
 
 byId('prev').onclick = () => loadPage(lastRequest, pageResult.page - 1, false);
 byId('next').onclick = () => loadPage(lastRequest, pageResult.page + 1, false);
-byId('clear-selection').onclick = () => { selected.clear(); renderSelected(); renderResults(); };
+function clearSelection() {
+  if (reviewing || searching) return;
+  selected.clear();
+  renderSelected();
+  renderResults();
+}
+byId('clear-selection').onclick = clearSelection;
+byId('clear-literature-selection').onclick = clearSelection;
 byId('edit-expression').onclick = () => {
   byId('english').value = pageResult.englishQuery;
   byId('english-options').open = true;
@@ -915,10 +964,6 @@ function syncNavigation() {
       byId('paper-detail-content').replaceChildren(element('p', '请返回文献列表重新查找该记录。', 'detail-missing'));
     }
   }
-  const selection = byId('reading-tools');
-  const parent = byId(active === 'review' ? 'review-selection' : 'browse-grid');
-  if (selection.parentElement !== parent) parent.append(selection);
-  byId('view-review').hidden = active === 'review';
   const rerankTarget = byId(active === 'ranking' ? 'ranking-action' : 'local-filters');
   if (byId('rerank').parentElement !== rerankTarget) rerankTarget.append(byId('rerank'));
   if (active === 'library') renderLibrary();
