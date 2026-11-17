@@ -40,3 +40,34 @@ export function remember(kind, item) {
 export function clearRecent(kind) {
   save(kind, []);
 }
+
+const libraryLimit = 200;
+
+export function savedArticles() {
+  if (!cache.has('library')) {
+    let saved = [];
+    try {
+      const stored = JSON.parse(localStorage.getItem(key('library')) ?? '[]');
+      if (Array.isArray(stored)) saved = stored.filter(article =>
+        typeof article?.pmid === 'string' && /^[1-9]\d{0,11}$/.test(article.pmid) && Array.isArray(article.authors));
+    } catch {
+      // A blocked or invalid store starts with an empty library.
+    }
+    cache.set('library', saved.slice(0, libraryLimit));
+  }
+  return cache.get('library');
+}
+
+export function changeLibrary(article) {
+  const saved = savedArticles();
+  const exists = saved.some(item => item.pmid === article.pmid);
+  if (!exists && saved.length >= libraryLimit) throw new Error('文献库已达 200 篇，请先移除不需要的记录。');
+  const next = exists ? saved.filter(item => item.pmid !== article.pmid) : [article, ...saved];
+  try {
+    localStorage.setItem(key('library'), JSON.stringify(next));
+  } catch {
+    throw new Error('浏览器无法保存文献库，请检查存储权限或可用空间。');
+  }
+  cache.set('library', next);
+  return !exists;
+}

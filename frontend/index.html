@@ -7,19 +7,35 @@
   <link rel="stylesheet" href="reference.css">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="evidence.css">
+  <link rel="stylesheet" href="navigation.css">
   <script type="module" src="search.js"></script>
 </head>
 <body>
 <div class="app-shell">
   <aside class="sidebar" aria-label="主导航">
-    <a class="brand" href="#question" aria-label="MedEvidence 研究工作台">
-      <span class="brand-icon" aria-hidden="true">M</span>
-      <span class="brand-copy"><strong>MedEvidence</strong><small>循证研究工作台</small></span>
-    </a>
-    <nav class="nav-list" aria-label="工作台导航">
-      <a class="nav-link active" href="#question" aria-label="研究工作台" aria-current="page"><img src="assets/home.svg" alt=""><span>研究工作台</span></a>
-      <a class="nav-link" href="#literature" aria-label="文献浏览"><img src="assets/papers.svg" alt=""><span>文献浏览</span></a>
-      <a class="nav-link" href="#review" aria-label="证据综述"><img src="assets/evidence.svg" alt=""><span>证据综述</span></a>
+    <div class="sidebar-heading">
+      <a class="brand" href="#question"><strong>MedEvidence</strong><small>医学循证研究平台</small></a>
+      <button type="button" id="toggle-navigation" aria-controls="workspace-navigation" aria-expanded="false">菜单</button>
+    </div>
+    <nav class="nav-list" id="workspace-navigation" aria-label="工作台导航">
+      <section class="nav-group">
+        <h2>研究空间</h2>
+        <a class="nav-link active" href="#question" aria-current="page"><img src="assets/navigation/home.svg" alt=""><span>研究工作台</span></a>
+        <a class="nav-link" href="#literature"><img src="assets/navigation/search.svg" alt=""><span>文献检索</span></a>
+        <a class="nav-link" href="#library"><img src="assets/navigation/library.svg" alt=""><span>我的文献库</span></a>
+        <a class="nav-link" href="#history"><img src="assets/navigation/history.svg" alt=""><span>检索历史</span></a>
+      </section>
+      <section class="nav-group">
+        <h2>智能分析</h2>
+        <a class="nav-link" href="#ranking"><img src="assets/navigation/ranking.svg" alt=""><span>智能文献排序</span></a>
+        <a class="nav-link" href="#comparison"><img src="assets/navigation/comparison.svg" alt=""><span>证据对比</span></a>
+        <a class="nav-link" href="#review"><img src="assets/navigation/review.svg" alt=""><span>AI 证据综述</span></a>
+        <a class="nav-link" href="#tasks"><img src="assets/navigation/tasks.svg" alt=""><span>分析任务</span></a>
+      </section>
+      <section class="nav-group">
+        <h2>系统</h2>
+        <a class="nav-link" href="#models"><img src="assets/navigation/models.svg" alt=""><span>模型配置</span></a>
+      </section>
     </nav>
   </aside>
 
@@ -77,7 +93,7 @@
       </section>
 
       <section id="literature" aria-labelledby="browse-title" hidden>
-        <header class="page-heading"><h1 id="browse-title">文献浏览</h1><p>筛选 PubMed 候选文献，快速判断是否值得精读。</p></header>
+        <header class="page-heading"><h1 id="browse-title">文献检索</h1><p>筛选 PubMed 候选文献，快速判断是否值得精读。</p></header>
         <div class="papers-page">
           <form class="paper-search-row" id="browse-search">
             <input id="browse-query" aria-label="研究问题" maxlength="1000" required placeholder="输入研究问题">
@@ -143,16 +159,75 @@
         </div>
       </section>
 
+      <section id="library" aria-labelledby="library-title" hidden>
+        <header class="page-heading"><h1 id="library-title">我的文献库</h1><p>管理本浏览器收藏的 PubMed 文献。</p></header>
+        <div class="route-body">
+          <div class="route-toolbar">
+            <input id="library-filter" type="search" aria-label="筛选收藏" placeholder="搜索标题、作者、期刊或 PMID">
+            <button id="library-md" type="button" class="detail-back" disabled>导出 Markdown</button>
+            <button id="library-bib" type="button" class="detail-back" disabled>导出 BibTeX</button>
+          </div>
+          <p id="library-status" class="detail-notice" role="status"></p>
+          <div id="library-results"></div>
+        </div>
+      </section>
+
+      <section id="history" aria-labelledby="history-page-title" hidden>
+        <header class="page-heading"><h1 id="history-page-title">检索历史</h1><p>查看成功查询，恢复研究问题、英文检索式和筛选条件。</p></header>
+        <div id="history-content" class="route-body"></div>
+      </section>
+
+      <section id="ranking" aria-labelledby="ranking-title" hidden>
+        <header class="page-heading"><h1 id="ranking-title">智能文献排序</h1><p>比较本页 PubMed 顺序、BM25 分数和模型相关性判断。</p></header>
+        <div class="route-body">
+          <div class="route-toolbar"><a class="detail-back" href="#literature">返回文献检索</a><div id="ranking-action"></div></div>
+          <p id="ranking-status" class="detail-notice" role="status"></p>
+          <div id="ranking-results"></div>
+        </div>
+      </section>
+
+      <section id="comparison" aria-labelledby="comparison-title" hidden>
+        <header class="page-heading"><h1 id="comparison-title">证据对比</h1><p>比较分析任务提取的研究对象、方法、主要发现和局限。</p></header>
+        <div id="comparison-content" class="route-body">
+          <p>先在文献检索页选文献，再生成 AI 证据综述或打开已完成的任务。</p>
+          <a class="detail-back" href="#review">打开 AI 证据综述</a>
+          <a class="detail-back" href="#tasks">查看分析任务</a>
+        </div>
+      </section>
+
+      <section id="tasks" aria-labelledby="tasks-page-title" hidden>
+        <header class="page-heading"><h1 id="tasks-page-title">分析任务</h1><p>查看当前浏览器记录的异步任务状态，重新打开历史分析。</p></header>
+        <div id="tasks-content" class="route-body"></div>
+      </section>
+
+      <section id="models" aria-labelledby="models-title" hidden>
+        <header class="page-heading"><h1 id="models-title">模型配置</h1><p>核对模型服务和综述所需的后端配置。</p></header>
+        <div class="route-body models-panel">
+          <dl id="model-settings" class="route-settings"></dl>
+          <div class="route-toolbar">
+            <button id="refresh-model-settings" type="button" class="detail-back">刷新配置状态</button>
+            <button id="test-model" type="button" class="detail-back" disabled>测试模型连接</button>
+          </div>
+          <p id="model-connection" class="detail-notice" role="status"></p>
+          <h2>后端环境变量</h2>
+          <dl class="route-settings">
+            <div><dt><code>AI_BASE_URL</code>、<code>AI_MODEL</code></dt><dd>OpenAI 兼容服务地址和模型名称。</dd></div>
+            <div><dt><code>AI_API_KEY</code></dt><dd>在后端环境变量或 <code>.env</code> 中设置，修改后重启后端。页面不会读取或显示密钥。</dd></div>
+            <div><dt><code>REVIEW_DB_*</code></dt><dd>启用持久化综述需要 MySQL 连接及数据库迁移。</dd></div>
+          </dl>
+        </div>
+      </section>
+
       <section id="detail" aria-labelledby="detail-title" hidden>
         <header class="page-heading"><h1 id="detail-title">文献详情</h1><p>阅读摘要，核对文献来源。</p></header>
         <div class="detail-page">
-          <div class="detail-toolbar"><a class="detail-back" href="#literature">← 返回列表</a><nav class="detail-crumbs" aria-label="面包屑"><a href="#literature">文献浏览</a><span aria-hidden="true">›</span><span id="detail-crumb"></span></nav></div>
+          <div class="detail-toolbar"><a class="detail-back" id="detail-return" href="#literature">← 返回列表</a><nav class="detail-crumbs" aria-label="面包屑"><a id="detail-parent" href="#literature">文献检索</a><span aria-hidden="true">›</span><span id="detail-crumb"></span></nav></div>
           <div id="paper-detail-content" class="detail-grid"></div>
         </div>
       </section>
 
       <section id="review" aria-labelledby="evidence-title" hidden>
-        <header class="page-heading"><h1 id="evidence-title">证据综述</h1><p>基于已选文献提取研究证据，核对每条引文。</p></header>
+        <header class="page-heading"><h1 id="evidence-title">AI 证据综述</h1><p>基于已选文献提取研究证据，核对每条引文。</p></header>
         <div class="detail-page">
           <div class="detail-grid">
             <section id="review-content" class="detail-main" aria-label="证据综述正文">

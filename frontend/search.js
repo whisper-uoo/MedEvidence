@@ -1,4 +1,4 @@
-import { recent, remember, clearRecent } from './history.js';
+import { recent, remember, clearRecent, savedArticles, changeLibrary } from './history.js';
 import { citation, downloadText, literatureBibtex, literatureMarkdown, markdownText } from './exports.js';
 
 const apiOrigin = window.MED_EVIDENCE_API_ORIGIN ?? 'http://localhost:8080';
@@ -131,7 +131,7 @@ function renderPaperDetail(article) {
     renderResults();
   };
   syncSelection();
-  info.append(infoHeader, metadata, original, select, notice);
+  info.append(infoHeader, metadata, original, select, favoriteButton(article, notice, 'detail-secondary'), notice);
   aside.append(info);
   target.replaceChildren(main, aside);
 }
@@ -183,9 +183,105 @@ function renderArticle(article) {
     details.append(element('summary', '展开摘要'), element('p', article.abstractText));
     body.append(details);
   }
-  body.append(pubmed(article.pmid, 'PubMed 原文 ↗'));
+  const actions = element('div', '', 'paper-actions');
+  const libraryNotice = element('span', '', 'detail-notice');
+  libraryNotice.setAttribute('role', 'status');
+  actions.append(pubmed(article.pmid, 'PubMed 原文 ↗'), favoriteButton(article, libraryNotice), libraryNotice);
+  body.append(actions);
   card.append(label, body);
   return card;
+}
+
+function favoriteButton(article, notice, className = 'detail-back') {
+  const button = element('button', '', className);
+  button.type = 'button';
+  const sync = () => {
+    const saved = savedArticles().some(item => item.pmid === article.pmid);
+    button.textContent = saved ? '取消收藏' : '收藏文献';
+    button.setAttribute('aria-pressed', String(saved));
+  };
+  sync();
+  button.onclick = () => {
+    try {
+      const saved = changeLibrary(article);
+      sync();
+      notice.textContent = saved ? '已保存到我的文献库。' : '已从我的文献库移除。';
+      if (!byId('library').hidden) renderLibrary();
+    } catch (error) {
+      notice.textContent = error.message;
+    }
+  };
+  return button;
+}
+
+function makeTable(headers) {
+  const region = element('div', '', 'route-grid');
+  region.tabIndex = 0;
+  region.setAttribute('role', 'region');
+  region.setAttribute('aria-label', headers.join('、'));
+  const table = element('table', '', 'route-table');
+  const heading = table.createTHead().insertRow();
+  for (const label of headers) {
+    const cell = element('th', label);
+    cell.scope = 'col';
+    heading.append(cell);
+  }
+  region.append(table);
+  return { region, rows: table.createTBody() };
+}
+
+function renderLibrary() {
+  const container = byId('library-results');
+  const saved = savedArticles();
+  byId('library-md').disabled = byId('library-bib').disabled = !saved.length;
+  const filter = byId('library-filter').value.trim().toLocaleLowerCase();
+  const visible = saved.filter(article => [article.title, article.journal, article.pmid, ...article.authors]
+    .some(value => typeof value === 'string' && value.toLocaleLowerCase().includes(filter)));
+  container.replaceChildren();
+  if (!visible.length) {
+    container.append(element('p', saved.length ? '没有符合筛选条件的收藏。' : '文献库还没有收藏。可在文献检索结果或详情页收藏。'));
+    return;
+  }
+  const { region, rows } = makeTable(['文献', '期刊与日期', '来源', '操作']);
+  for (const article of visible) {
+    const row = rows.insertRow();
+    const title = element('a', article.title ?? '标题未收录');
+    title.href = '#detail/' + article.pmid + '/library';
+    row.insertCell().append(title);
+    row.insertCell().textContent = [article.journal, article.publicationDate].filter(Boolean).join(' · ') || '未收录';
+    row.insertCell().append(pubmed(article.pmid));
+    const actions = row.insertCell();
+    actions.append(favoriteButton(article, byId('library-status')));
+  }
+  container.append(region);
+}
+byId('library-filter').oninput = renderLibrary;
+byId('library-md').onclick = () => downloadText('MedEvidence-library.md', literatureMarkdown(savedArticles()), 'text/markdown');
+byId('library-bib').onclick = () => downloadText('MedEvidence-library.bib', literatureBibtex(savedArticles()), 'application/x-bibtex');
+
+function renderRanking() {
+  const target = byId('ranking-results');
+  target.replaceChildren();
+  if (!articles.length) {
+    target.append(element('p', '检索 PubMed 后，这里会列出当前候选文献的排序。'));
+    return;
+  }
+  const { region, rows } = makeTable(['文献', 'PubMed 位置', 'BM25', 'AI 分数', '推荐理由']);
+  const ordered = [...articles].sort((left, right) => semanticOrder
+    ? semanticOrder.get(left.pmid) - semanticOrder.get(right.pmid)
+    : rankings.get(right.pmid).bm25 - rankings.get(left.pmid).bm25);
+  for (const article of ordered) {
+    const score = rankings.get(article.pmid);
+    const row = rows.insertRow();
+    const title = element('a', article.title ?? `PMID ${article.pmid}`);
+    title.href = '#detail/' + article.pmid;
+    row.insertCell().append(title);
+    row.insertCell().textContent = score.pubmedRank;
+    row.insertCell().textContent = score.bm25.toFixed(2);
+    row.insertCell().textContent = score.semanticScore == null ? '—' : score.semanticScore + '/100';
+    row.insertCell().textContent = score.reason ?? (semanticOrder ? '未进入模型候选范围' : '尚未运行模型排序');
+  }
+  target.append(region);
 }
 
 function dateKey(article) {
@@ -216,6 +312,7 @@ function setBusy() {
   byId('rerank').disabled = busy || !capabilities.semantic || !articles.length || Boolean(semanticOrder);
   byId('prev').disabled = busy || !pageResult || pageResult.page <= 1;
   byId('next').disabled = busy || !pageResult || pageResult.page * pageResult.limit >= pageResult.accessibleTotal;
+  if (!byId('ranking').hidden) renderRanking();
   updateReviewButton();
   renderHistory();
 }
@@ -224,6 +321,7 @@ function showNotice(message) {
   const notice = byId('ranking-notice');
   notice.textContent = message ?? '';
   notice.hidden = !message;
+  byId('ranking-status').textContent = message ?? '';
 }
 
 async function loadPage(request, page, newSearch) {
@@ -251,6 +349,7 @@ async function loadPage(request, page, newSearch) {
     if (newSearch) {
       selected.clear();
       currentReview = null;
+      renderComparisonRoute();
       byId('export-review').hidden = true;
       reviewStatus.removeAttribute('data-state');
       reviewStatus.textContent = capabilities.review ? '' : '配置模型与 MySQL 后可生成证据综述。';
@@ -395,40 +494,88 @@ byId('rerank').onclick = async () => {
 
 const taskLabels = { PENDING: '排队中', RUNNING: '分析中', SUCCESS: '已完成', FAILED: '失败', TIMED_OUT: '已超时' };
 
+function historyTime(item) {
+  return new Date(item.at).toLocaleString('zh-CN', { dateStyle: 'short', timeStyle: 'short' });
+}
+
+function restoreSearch(item) {
+  const request = item.request;
+  byId('query').value = request.query;
+  byId('english').value = request.englishQuery ?? '';
+  byId('from-year').value = request.fromYear ?? '';
+  byId('to-year').value = request.toYear ?? '';
+  byId('publication-type').value = request.publicationType ?? '';
+  byId('page-size').value = request.limit ?? 10;
+  if (lastRequest && JSON.stringify(lastRequest) === JSON.stringify(request)) {
+    window.location.hash = 'literature';
+  } else {
+    loadPage(request, 1, true);
+  }
+}
+
 function renderHistory() {
+  const busy = searching || reviewing || reranking;
   for (const [kind, empty] of [['searches', '成功检索后，可在这里重新运行。'], ['tasks', '提交证据分析后，可在这里重新打开任务。']]) {
     const list = byId('recent-' + kind);
     const entries = recent(kind);
     byId('clear-' + kind).hidden = !entries.length;
+    const task = kind === 'tasks';
+    const actionLabel = task ? '查看任务' : '恢复查询';
+    const actionFor = item => task ? reopenTask(item) : restoreSearch(item);
+    const details = item => task ? taskLabels[item.state] ?? '未知状态' : `${item.total.toLocaleString()} 篇`;
     list.replaceChildren();
     if (!entries.length) list.append(element('li', empty, 'recent-empty'));
+    const page = byId(task ? 'tasks-content' : 'history-content');
+    page.replaceChildren();
+    if (!entries.length) {
+      page.append(element('p', empty));
+      continue;
+    }
+    const tools = element('div', '', 'route-toolbar');
+    const clear = element('button', '清空本地记录', 'detail-back');
+    clear.type = 'button';
+    clear.disabled = busy;
+    clear.onclick = () => { clearRecent(kind); renderHistory(); };
+    tools.append(clear);
+    const { region, rows } = makeTable([task ? '研究问题' : '检索问题', task ? '状态' : '匹配结果', '时间', '操作']);
     for (const item of entries) {
       const row = element('li');
       const action = element('button', '', 'recent-paper');
       action.type = 'button';
-      action.disabled = searching || reviewing || reranking;
-      const time = new Date(item.at).toLocaleString('zh-CN', { dateStyle: 'short', timeStyle: 'short' });
-      const info = kind === 'searches' ? `${item.total.toLocaleString()} 篇` : taskLabels[item.state] ?? '查看任务';
-      const title = element('span', item.question);
-      title.title = item.question;
-      action.append(title, element('small', info + ' · ' + time));
-      action.onclick = () => {
-        if (kind === 'tasks') {
-          reopenTask(item);
-        } else {
-          const request = item.request;
-          byId('query').value = request.query;
-          byId('english').value = request.englishQuery ?? '';
-          byId('from-year').value = request.fromYear ?? '';
-          byId('to-year').value = request.toYear ?? '';
-          byId('publication-type').value = request.publicationType ?? '';
-          byId('page-size').value = request.limit ?? 10;
-          loadPage(request, 1, true);
-        }
-      };
+      action.disabled = busy;
+      action.append(element('span', item.question), element('small', details(item) + ' · ' + historyTime(item)));
+      action.onclick = () => actionFor(item);
       row.append(action);
       list.append(row);
+
+      const tableRow = rows.insertRow();
+      tableRow.insertCell().textContent = item.question;
+      tableRow.insertCell().textContent = details(item);
+      tableRow.insertCell().textContent = historyTime(item);
+      const actions = tableRow.insertCell();
+      actions.className = 'actions';
+      const open = element('button', actionLabel, 'detail-back');
+      open.type = 'button';
+      open.disabled = busy;
+      open.onclick = () => actionFor(item);
+      actions.append(open);
+      if (task) {
+        const refresh = element('button', '更新状态', 'detail-back');
+        refresh.type = 'button';
+        refresh.disabled = busy;
+        refresh.onclick = async () => {
+          refresh.disabled = true;
+          try {
+            recordTask((await api('/reviews/' + item.id)).data, item.question);
+          } catch (error) {
+            actions.append(element('span', error.message, 'detail-notice'));
+            refresh.disabled = false;
+          }
+        };
+        actions.append(refresh);
+      }
     }
+    page.append(tools, region);
   }
 }
 
@@ -471,9 +618,9 @@ function inReviewLink(label, target, open = false) {
   return link;
 }
 
-function renderComparison(evidence, references) {
+function renderComparison(evidence, references, standalone = false) {
   const section = element('section', '', 'compare-page review-section');
-  section.id = 'review-comparison';
+  section.id = standalone ? 'comparison-table' : 'review-comparison';
   section.tabIndex = -1;
   const toolbar = element('header', '', 'compare-toolbar');
   const heading = element('div');
@@ -498,7 +645,23 @@ function renderComparison(evidence, references) {
     const column = element('th');
     column.scope = 'col';
     const reference = references.get(item.pmid);
-    column.append(inReviewLink('PMID ' + item.pmid, 'evidence-' + item.pmid, true));
+    const link = standalone ? element('a', 'PMID ' + item.pmid) : inReviewLink('PMID ' + item.pmid, 'evidence-' + item.pmid, true);
+    if (standalone) {
+      link.href = '#review';
+      link.onclick = event => {
+        event.preventDefault();
+        window.location.hash = 'review';
+        syncNavigation();
+        requestAnimationFrame(() => {
+          const evidenceSource = byId('evidence-' + item.pmid);
+          if (!evidenceSource) return;
+          evidenceSource.open = true;
+          evidenceSource.querySelector('summary')?.focus({ preventScroll: true });
+          evidenceSource.scrollIntoView({ block: 'start' });
+        });
+      };
+    }
+    column.append(link);
     if (reference?.title) column.append(element('small', reference.title));
     header.append(column);
   }
@@ -514,6 +677,23 @@ function renderComparison(evidence, references) {
   scroller.append(table);
   section.append(scroller);
   return section;
+}
+
+function renderComparisonRoute() {
+  const target = byId('comparison-content');
+  target.replaceChildren();
+  if (!currentReview) {
+    target.append(element('p', '先生成综述或打开已完成的分析任务，这里会显示逐篇证据。'));
+    for (const [hash, label] of [['review', '打开 AI 证据综述'], ['tasks', '查看分析任务']]) {
+      const link = element('a', label, 'detail-back');
+      link.href = '#' + hash;
+      target.append(link, ' ');
+    }
+    return;
+  }
+  if (currentReview.question) target.append(element('h2', currentReview.question, 'review-topic'));
+  const references = new Map((currentReview.references ?? []).map(article => [article.pmid, article]));
+  target.append(renderComparison(currentReview.evidence ?? [], references, true));
 }
 
 function renderReview(review, topic) {
@@ -596,6 +776,7 @@ async function followReview(task, topic) {
   if (task.state !== 'SUCCESS') throw new Error(task.message ?? '综述任务失败。');
   currentReview = task.result;
   renderReview(currentReview, topic);
+  renderComparisonRoute();
   byId('export-review').hidden = false;
   reviewStatus.textContent = '综述已生成。';
 }
@@ -604,6 +785,7 @@ async function runReview(start, topic, initialStatus) {
   reviewing = true;
   setBusy();
   currentReview = null;
+  renderComparisonRoute();
   byId('export-review').hidden = true;
   reviewStatus.dataset.state = 'PENDING';
   reviewStatus.textContent = initialStatus;
@@ -640,14 +822,56 @@ byId('filter').oninput = renderResults;
 byId('sort').onchange = renderResults;
 byId('abstract-only').onchange = renderResults;
 
-try {
-  capabilities = (await api('/capabilities')).data;
-  setBusy();
-  byId('model-state').textContent = capabilities.semantic ? '' : '模型未配置';
-  if (!capabilities.review) reviewStatus.textContent = '需要配置模型与 MySQL 才能生成综述。';
-} catch {
-  byId('model-state').textContent = '无法读取后端配置';
+function showModelSettings(model, review) {
+  const list = byId('model-settings');
+  list.replaceChildren();
+  for (const [label, value] of [['模型配置', model], ['证据综述配置', review]]) {
+    const line = element('div');
+    line.append(element('dt', label), element('dd', value));
+    list.append(line);
+  }
 }
+
+let checkingModel = false;
+async function refreshCapabilities() {
+  byId('refresh-model-settings').disabled = true;
+  byId('test-model').disabled = true;
+  try {
+    capabilities = (await api('/capabilities')).data;
+    setBusy();
+    byId('model-state').textContent = capabilities.semantic ? '' : '模型未配置';
+    showModelSettings(
+      capabilities.semantic ? '已配置，可主动测试连接。' : '未配置模型地址、名称或密钥。',
+      capabilities.review ? '模型与 MySQL 参数已配置。' : '需要配置模型与 MySQL。');
+    if (!capabilities.review && !reviewing && !currentReview) reviewStatus.textContent = '需要配置模型与 MySQL 才能生成综述。';
+  } catch {
+    capabilities = { semantic: false, review: false };
+    setBusy();
+    byId('model-state').textContent = '无法读取后端配置';
+    showModelSettings('后端暂不可达。', '未能读取配置。');
+  } finally {
+    byId('refresh-model-settings').disabled = false;
+    byId('test-model').disabled = !capabilities.semantic || checkingModel;
+  }
+}
+
+byId('refresh-model-settings').onclick = refreshCapabilities;
+byId('test-model').onclick = async () => {
+  if (checkingModel || !capabilities.semantic) return;
+  checkingModel = true;
+  byId('test-model').disabled = true;
+  const result = byId('model-connection');
+  result.textContent = '正在发起一次最小模型请求…';
+  try {
+    const response = await api('/models/connection-test', {}, 65000);
+    result.textContent = response.message;
+  } catch (error) {
+    result.textContent = error.message;
+  } finally {
+    checkingModel = false;
+    byId('test-model').disabled = !capabilities.semantic;
+  }
+};
 
 byId('export-review').onclick = () => {
   if (!currentReview) return;
@@ -673,14 +897,18 @@ byId('export-review').onclick = () => {
 };
 
 function syncNavigation() {
-  const pages = ['question', 'literature', 'detail', 'review'];
-  const [section, pmid] = window.location.hash.slice(1).split('/');
+  const pages = ['question', 'literature', 'library', 'history', 'ranking', 'comparison', 'review', 'tasks', 'models', 'detail'];
+  const [section, pmid, parentRoute] = window.location.hash.slice(1).split('/');
+  const detailParent = parentRoute === 'library' ? 'library' : 'literature';
   const active = pages.includes(section) ? section : 'question';
   for (const id of pages) byId(id).hidden = id !== active;
   byId('global-search').hidden = active === 'question' || active === 'literature';
   byId('workspace-label').hidden = !byId('global-search').hidden;
   if (active === 'detail') {
-    const article = articles.find(item => item.pmid === pmid) ?? selected.get(pmid);
+    byId('detail-return').href = '#' + detailParent;
+    byId('detail-parent').href = '#' + detailParent;
+    byId('detail-parent').textContent = detailParent === 'library' ? '我的文献库' : '文献检索';
+    const article = articles.find(item => item.pmid === pmid) ?? selected.get(pmid) ?? savedArticles().find(item => item.pmid === pmid);
     if (article) renderPaperDetail(article);
     else {
       byId('detail-crumb').textContent = '';
@@ -691,13 +919,40 @@ function syncNavigation() {
   const parent = byId(active === 'review' ? 'review-selection' : 'browse-grid');
   if (selection.parentElement !== parent) parent.append(selection);
   byId('view-review').hidden = active === 'review';
+  const rerankTarget = byId(active === 'ranking' ? 'ranking-action' : 'local-filters');
+  if (byId('rerank').parentElement !== rerankTarget) rerankTarget.append(byId('rerank'));
+  if (active === 'library') renderLibrary();
+  if (active === 'literature') renderResults();
+  if (active === 'ranking') renderRanking();
+  if (active === 'comparison') renderComparisonRoute();
+  if (active === 'history' || active === 'tasks') renderHistory();
   for (const link of document.querySelectorAll('.nav-list a')) {
-    const matches = link.getAttribute('href') === '#' + (active === 'detail' ? 'literature' : active);
+    const matches = link.getAttribute('href') === '#' + (active === 'detail' ? detailParent : active);
     link.classList.toggle('active', matches);
     if (matches) link.setAttribute('aria-current', 'page');
     else link.removeAttribute('aria-current');
   }
 }
+const menu = byId('toggle-navigation');
+const navigation = byId('workspace-navigation');
+function setMenu(open) {
+  navigation.toggleAttribute('data-open', open);
+  menu.setAttribute('aria-expanded', String(open));
+}
+menu.onclick = () => setMenu(!navigation.hasAttribute('data-open'));
+navigation.addEventListener('click', event => {
+  if (event.target.closest('.nav-link') && navigation.hasAttribute('data-open')) {
+    setMenu(false);
+    menu.focus();
+  }
+});
+navigation.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && navigation.hasAttribute('data-open')) {
+    setMenu(false);
+    menu.focus();
+  }
+});
+
 window.addEventListener('hashchange', () => {
   syncNavigation();
   window.scrollTo({ top: 0, behavior: 'instant' });
@@ -705,3 +960,5 @@ window.addEventListener('hashchange', () => {
 syncNavigation();
 
 renderHistory();
+
+await refreshCapabilities();
