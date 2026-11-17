@@ -18,46 +18,71 @@
 <main>
   <section class="hero" id="question" aria-labelledby="main-title">
     <div class="intro">
-      <p class="eyebrow">MEDICAL LITERATURE WORKSPACE</p>
+
       <h1 id="main-title">循证研究工作台</h1>
-      <p>从医学研究问题出发，查找 PubMed 文献、筛选来源并生成有引文的证据综述。</p>
+      <p>基于大语言模型的医学文献智能检索与证据综述系统。</p>
     </div>
     <form id="search">
       <label for="query">医学研究问题</label>
       <textarea id="query" required maxlength="1000" rows="2" placeholder="例如，二甲双胍对 2 型糖尿病患者的效果？"></textarea>
+      <div class="examples"><span>试试</span>
+        <button type="button" class="secondary example">睡眠不足是否影响大学生记忆能力</button>
+        <button type="button" class="secondary example">二甲双胍对 2 型糖尿病患者的效果？</button>
+      </div>
       <details id="english-options">
         <summary>补充英文检索式</summary>
         <label class="visually-hidden" for="english">英文检索式</label>
         <input id="english" maxlength="1000" placeholder="metformin AND type 2 diabetes">
       </details>
       <div class="search-actions">
-        <label class="toggle"><input type="checkbox" id="semantic" disabled> AI 语义排序</label>
         <span id="model-state">正在检查 AI 配置…</span>
         <button type="submit" id="search-button">检索 PubMed</button>
       </div>
     </form>
   </section>
   <div class="workspace">
+    <section class="search-facets" aria-labelledby="facet-title">
+      <h2 id="facet-title">检索条件</h2>
+      <div class="year-range">
+        <label>起始年份<input form="search" id="from-year" type="number" min="1500" placeholder="不限"></label>
+        <label>截止年份<input form="search" id="to-year" type="number" min="1500" placeholder="不限"></label>
+      </div>
+      <label>文献类型<select form="search" id="publication-type">
+        <option value="">全部类型</option><option value="rct">随机对照试验</option>
+        <option value="systematic">系统评价</option><option value="meta">Meta 分析</option>
+        <option value="review">综述</option><option value="clinical">临床试验</option>
+      </select></label>
+      <label>每页篇数<select form="search" id="page-size"><option>10</option><option>20</option><option>30</option><option>50</option></select></label>
+      <button type="submit" form="search" class="secondary" id="apply-filters">应用条件</button>
+    </section>
     <section class="literature" id="literature" aria-labelledby="results-title">
       <header class="section-head">
         <h2 id="results-title">文献结果</h2>
         <p id="status" role="status">输入研究问题开始检索。</p>
       </header>
-      <details id="expression" hidden><summary>查看 PubMed 检索式</summary><p></p></details>
+      <details id="expression" hidden><summary>查看 PubMed 检索式</summary><p></p><button type="button" class="secondary" id="edit-expression">编辑英文检索式</button></details>
       <div class="filters" id="filters" hidden>
         <label>结果内搜索<input id="filter" type="search" placeholder="标题、作者、期刊、PMID"></label>
-        <label>排序<select id="sort"><option value="rank">相关性</option><option value="bm25">BM25</option><option value="year">发表年份 · 新到旧</option></select></label>
+        <label>排序<select id="sort"><option value="bm25">本页 BM25</option><option value="pubmed">PubMed 最佳匹配</option><option value="year">本页发表日期</option><option value="ai" disabled>本页 AI 相关性</option></select></label>
         <label class="toggle"><input type="checkbox" id="abstract-only">有摘要</label>
+        <button type="button" class="secondary" id="rerank" disabled>AI 重排序</button>
       </div>
       <p id="ranking-notice" class="notice" hidden></p>
       <div id="results"></div>
+      <div class="pagination" id="pagination" hidden>
+        <button type="button" class="secondary" id="prev">上一页</button>
+        <span id="page-label" aria-live="polite"></span>
+        <button type="button" class="secondary" id="next">下一页</button>
+      </div>
     </section>
     <aside id="review" aria-labelledby="review-title">
-      <header class="section-head"><h2 id="review-title">证据综述</h2><p id="selection-count">已选 0 / 8 篇</p></header>
+      <header class="section-head"><h2 id="review-title">证据综述</h2><p id="selection-count">已选 0 / 10 篇</p></header>
       <div id="selected"></div>
-      <p class="note">综述使用 PubMed 摘要。请核对原文、研究设计与局限。</p>
+      <button type="button" class="secondary" id="clear-selection" hidden>清空选择</button>
+      <p class="note">AI 生成 · 基于 PubMed 摘要，用于科研信息辅助。请核对原文；不用于个体诊疗。</p>
       <button type="button" id="review-button" disabled>生成证据综述</button>
       <p id="review-status" role="status"></p>
+      <button type="button" class="secondary" id="export-review" hidden>导出 Markdown</button>
       <div id="review-result"></div>
     </aside>
   </div>
