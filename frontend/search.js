@@ -394,3 +394,13 @@ byId('export-review').onclick = () => {
   download.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
+
+function syncNavigation() {
+  const section = window.location.hash || '#question';
+  for (const link of document.querySelectorAll('.nav-list a')) {
+    if (link.getAttribute('href') === section) link.setAttribute('aria-current', 'location');
+    else link.removeAttribute('aria-current');
+  }
+}
+window.addEventListener('hashchange', syncNavigation);
+syncNavigation();

@@ -8,19 +8,25 @@
 <script type="module" src="search.js"></script>
 </head>
 <body>
-<header class="top">
-  <div class="top-inner">
-    <a class="brand" href="#question"><span aria-hidden="true">M</span> MedEvidence</a>
-    <nav aria-label="工作台导航"><a href="#question">检索</a><a href="#literature">文献</a><a href="#review">综述</a></nav>
-    <a class="source" href="https://pubmed.ncbi.nlm.nih.gov/" target="_blank" rel="noopener noreferrer">PubMed ↗</a>
-  </div>
-</header>
+<div class="app-shell">
+  <aside class="sidebar" aria-label="主导航">
+    <a class="brand" href="#question"><span aria-hidden="true">M</span><strong>MedEvidence</strong></a>
+    <nav class="nav-list" aria-label="工作台导航">
+      <a href="#question" aria-current="location">研究检索</a>
+      <a href="#literature">文献浏览</a>
+      <a href="#review">证据综述</a>
+    </nav>
+  </aside>
+  <div class="work-area">
+    <header class="topbar">
+      <a href="#question">循证研究工作台</a>
+      <a class="source" href="https://pubmed.ncbi.nlm.nih.gov/" target="_blank" rel="noopener noreferrer">PubMed ↗</a>
+    </header>
 <main>
   <section class="hero" id="question" aria-labelledby="main-title">
     <div class="intro">
-
-      <h1 id="main-title">循证研究工作台</h1>
-      <p>基于大语言模型的医学文献智能检索与证据综述系统。</p>
+      <h1 id="main-title">研究检索</h1>
+      <p>检索真实医学文献，筛选研究并生成带引文的证据综述。</p>
     </div>
     <form id="search">
       <label for="query">医学研究问题</label>
@@ -75,7 +81,7 @@
         <button type="button" class="secondary" id="next">下一页</button>
       </div>
     </section>
-    <aside id="review" aria-labelledby="review-title">
+    <aside class="reading-tools" id="review" aria-labelledby="review-title">
       <header class="section-head"><h2 id="review-title">证据综述</h2><p id="selection-count">已选 0 / 10 篇</p></header>
       <div id="selected"></div>
       <button type="button" class="secondary" id="clear-selection" hidden>清空选择</button>
@@ -88,5 +94,7 @@
   </div>
 </main>
 <footer>数据来源为 NCBI PubMed。 <a href="https://www.ncbi.nlm.nih.gov/home/about/policies/">NCBI 使用政策与摘要版权 ↗</a></footer>
+  </div>
+</div>
 </body>
 </html>
