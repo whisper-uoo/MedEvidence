@@ -58,6 +58,14 @@ python3 -m http.server 5173 --bind 127.0.0.1 --directory frontend
 
 模型会收到用户的研究问题和公开文献标题及摘要。请勿输入患者身份或其他敏感资料。实际密钥不得提交到仓库。
 
+### 阿里云百炼
+
+将工作空间对应的 OpenAI 兼容 Base URL、支持 JSON 对象输出的模型名称和 API Key 分别写入本地 `.env` 的 `AI_BASE_URL`、`AI_MODEL`、`AI_API_KEY`。例如北京通用端点为 `https://dashscope.aliyuncs.com/compatible-mode/v1`；也可使用控制台给出的专属端点。后端会附加 `/chat/completions`，并请求 `response_format.type=json_object`。地域、工作空间和模型权限以控制台为准。 [百炼 Chat 兼容接口](https://help.aliyun.com/zh/model-studio/qwen-api-via-openai-chat-completions)
+
+Spring Boot 读取继承的环境变量。直接运行 Maven、JAR 或 IntelliJ IDEA 时，`.env` 不会自动加载。请按上面的终端启动步骤导出 `.env`，或在 IDEA 的本地运行配置中设置环境变量。代码仓库只提交空值模板 `.env.example`。
+
+供应商返回 `usage` 时，后端只记录输入、输出和总 Token 数；HTTP 错误只记录状态码。日志不记录密钥、请求头、请求正文或供应商原始响应。缺失的用量值保持未知。
+
 ### 初始化 MySQL
 
 使用 MySQL 8.x 或兼容实例。以管理员身份创建数据库，并设置应用账户。将密码示例替换为本地密码：

@@ -14,6 +14,7 @@ import static org.springframework.http.HttpStatus.*;
 
 @Component
 final class ModelClient {
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(ModelClient.class);
     private final URI endpoint;
     private final String key;
     private final String model;
@@ -76,6 +77,9 @@ final class ModelClient {
                 .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body))).build();
             pending = http.sendAsync(request, HttpResponse.BodyHandlers.ofString());
             var response = pending.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            if (response.statusCode() != 200) {
+                LOG.warn("Model request failed: HTTP {}", response.statusCode());
+            }
             if (response.statusCode() == 429) {
                 throw new SearchProblem(SERVICE_UNAVAILABLE, "AI_RATE_LIMITED", "模型服务请求受限。",
                     response.headers().firstValue("Retry-After").orElse(null));
@@ -91,6 +95,7 @@ final class ModelClient {
             }
             JsonNode envelope = modelJson.readTree(response.body());
             if (envelope == null || !envelope.isObject()) throw invalid();
+            logUsage(envelope.path("usage"));
             var content = envelope.path("choices").path(0).path("message").path("content");
             if (!content.isTextual()) throw invalid();
             JsonNode result = modelJson.readTree(content.asText());
@@ -110,6 +115,20 @@ final class ModelClient {
             if (pending != null && !pending.isDone()) pending.cancel(true);
             slots.release();
         }
+    }
+
+    static void logUsage(JsonNode usage) {
+        var input = tokenCount(usage.path("prompt_tokens"));
+        var output = tokenCount(usage.path("completion_tokens"));
+        var total = tokenCount(usage.path("total_tokens"));
+        if (input != null || output != null || total != null) {
+            LOG.info("Model token usage: input={}, output={}, total={}", input, output, total);
+        }
+    }
+
+    private static Long tokenCount(JsonNode value) {
+        return value.isIntegralNumber() && value.canConvertToLong() && value.longValue() >= 0
+            ? value.longValue() : null;
     }
 
     static SearchProblem invalid() {
