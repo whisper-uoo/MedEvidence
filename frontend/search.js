@@ -57,10 +57,10 @@ function renderSelected() {
   list.replaceChildren();
   byId('clear-selection').hidden = selected.size === 0;
   byId('clear-selection').disabled = reviewing || searching;
-  byId('selection-count').textContent = `已选 ${selected.size} / 10 篇`;
+  byId('selected-total').textContent = selected.size;
   for (const article of selected.values()) {
     const line = element('div');
-    const remove = element('button', '移除', 'secondary');
+    const remove = element('button', '移除', 'detail-back');
     remove.type = 'button';
     remove.disabled = reviewing;
     remove.setAttribute('aria-label', '移除 ' + (article.title ?? article.pmid));
@@ -75,62 +75,112 @@ function renderSelected() {
   updateReviewButton();
 }
 
-function openPaper(article) {
+function renderPaperDetail(article) {
   const target = byId('paper-detail-content');
-  const heading = element('h2', article.title ?? '标题未收录');
-  heading.id = 'paper-detail-title';
-  const metadata = [article.journal, article.publicationDate, `PMID ${article.pmid}`,
-    article.doi && `DOI ${article.doi}`].filter(Boolean).join(' · ');
-  target.replaceChildren(heading, element('p', metadata, 'meta'));
-  if (article.authors.length) target.append(element('p', article.authors.join(', '), 'meta'));
-  target.append(pubmed(article.pmid, '查看 PubMed 原文 ↗'), element('h3', '摘要'),
-    element('p', article.abstractText ?? 'PubMed 未收录摘要。', 'abstract'));
-  byId('paper-detail').showModal();
+  const title = article.title ?? '标题未收录';
+  byId('detail-crumb').textContent = title;
+
+  const main = element('div', '', 'detail-main');
+  const flags = element('div', '', 'detail-paper-flags');
+  flags.append(element('span', 'PubMed'));
+  main.append(flags, element('h2', title));
+  if (article.authors.length) main.append(element('p', article.authors.join(', '), 'detail-notice'));
+  if (article.publicationTypes?.length) {
+    const types = element('div', '', 'detail-keywords');
+    for (const type of article.publicationTypes) types.append(element('span', type));
+    main.append(types);
+  }
+  const abstract = element('section', '', 'detail-abstract');
+  const header = element('div', '', 'detail-section-head');
+  header.append(element('h3', '摘要'));
+  abstract.append(header, element('p', article.abstractText ?? 'PubMed 未收录摘要。', 'abstract'));
+  main.append(abstract);
+
+  const aside = element('aside', '', 'detail-sidebar');
+  const info = element('section', '', 'detail-info');
+  const infoHeader = element('div', '', 'detail-info-head');
+  infoHeader.append(element('h3', '文献信息'));
+  const metadata = element('dl');
+  for (const [label, value] of [['期刊', article.journal], ['发表日期', article.publicationDate],
+    ['PMID', article.pmid], ['DOI', article.doi]]) {
+    const row = element('div');
+    row.append(element('dt', label), element('dd', value ?? '未收录'));
+    metadata.append(row);
+  }
+  const original = pubmed(article.pmid, '打开 PubMed 原文 ↗');
+  original.className = 'detail-original';
+  const select = element('button', '', 'detail-secondary');
+  select.type = 'button';
+  const syncSelection = () => {
+    select.textContent = selected.has(article.pmid) ? '取消选择' : '加入证据分析';
+    select.disabled = reviewing;
+  };
+  const notice = element('p', '', 'detail-notice');
+  notice.setAttribute('role', 'status');
+  select.onclick = () => {
+    if (!toggleSelection(article, !selected.has(article.pmid))) {
+      notice.textContent = '每份综述最多选择 10 篇文献。';
+      return;
+    }
+    notice.textContent = '';
+    syncSelection();
+    renderResults();
+  };
+  syncSelection();
+  info.append(infoHeader, metadata, original, select, notice);
+  aside.append(info);
+  target.replaceChildren(main, aside);
+}
+
+function toggleSelection(article, checked) {
+  if (reviewing || (checked && selected.size >= 10 && !selected.has(article.pmid))) return false;
+  if (checked) selected.set(article.pmid, article);
+  else selected.delete(article.pmid);
+  renderSelected();
+  return true;
 }
 
 function renderArticle(article) {
-  const card = element('article');
-  const head = element('div', '', 'article-head');
-  const title = element('h3');
-  const detailButton = element('button', article.title ?? '标题未收录', 'paper-title');
-  detailButton.type = 'button';
-  detailButton.onclick = () => openPaper(article);
-  title.append(detailButton);
-  const label = element('label', '', 'toggle');
+  const card = element('article', '', 'paper-item');
+  const label = element('label', '', 'compare-check');
   const checkbox = document.createElement('input');
   checkbox.type = 'checkbox';
   checkbox.checked = selected.has(article.pmid);
   checkbox.disabled = reviewing;
   checkbox.setAttribute('aria-label', '选入综述 ' + (article.title ?? article.pmid));
   checkbox.onchange = () => {
-    if (checkbox.checked && selected.size >= 10) {
-      checkbox.checked = false;
-      reviewStatus.textContent = '每份综述最多选择 10 篇文献。';
-      return;
+    if (!toggleSelection(article, checkbox.checked)) {
+      checkbox.checked = selected.has(article.pmid);
+      showNotice('每份综述最多选择 10 篇文献。');
     }
-    if (checkbox.checked) selected.set(article.pmid, article);
-    else selected.delete(article.pmid);
-    renderSelected();
   };
-  label.append(checkbox, '选择');
-  head.append(title, label);
-  const identity = [article.journal, article.publicationDate, `PMID ${article.pmid}`,
-    article.doi && `DOI ${article.doi}`].filter(Boolean).join(' · ');
-  card.append(head, element('p', identity, 'meta'));
-  if (article.publicationTypes?.length) card.append(element('p', article.publicationTypes.join(' · '), 'meta'));
-  if (article.authors.length) card.append(element('p', article.authors.join(', '), 'meta'));
+  label.append(checkbox);
+
+  const body = element('div', '', 'paper-item-body');
+  const meta = element('div', '', 'paper-meta');
+  meta.append(element('span', article.journal ?? 'PubMed', 'conference-tag'));
+  for (const entry of [article.publicationDate, `PMID ${article.pmid}`].filter(Boolean)) meta.append(element('span', entry));
+  const title = element('a', article.title ?? '标题未收录', 'paper-title');
+  title.href = '#detail/' + article.pmid;
+  body.append(meta, title);
+  if (article.authors.length) body.append(element('p', article.authors.join(', '), 'paper-meta'));
+  body.append(element('p', article.abstractText ?? 'PubMed 未提供此文献的摘要。', 'paper-abstract'));
+  const tags = element('div', '', 'paper-tags');
+  for (const type of article.publicationTypes ?? []) tags.append(element('span', type));
   const rank = rankings.get(article.pmid);
   if (rank) {
-    const scores = [`PubMed #${rank.pubmedRank}`, `BM25 ${rank.bm25.toFixed(2)}`];
-    if (rank.semanticScore !== null) scores.push(`模型相关性 ${rank.semanticScore}/100`);
-    card.append(element('p', scores.join(' · '), 'meta'));
-    if (rank.reason) card.append(element('p', rank.reason, 'reason'));
+    tags.append(element('span', `PubMed #${rank.pubmedRank}`), element('span', `BM25 ${rank.bm25.toFixed(2)}`));
+    if (rank.semanticScore !== null) tags.append(element('span', `模型相关性 ${rank.semanticScore}/100`));
+    if (rank.reason) body.append(element('p', rank.reason, 'paper-notice'));
   }
-  if (article.abstractText) card.append(element('p', article.abstractText.slice(0, 420), 'preview'));
-  const details = element('details');
-  details.append(element('summary', article.abstractText ? '展开摘要' : '摘要未收录'),
-    element('p', article.abstractText ?? 'PubMed 未提供此文献的摘要。', 'abstract'));
-  card.append(details, pubmed(article.pmid, `PubMed · ${article.pmid} ↗`));
+  body.append(tags);
+  if (article.abstractText) {
+    const details = element('details');
+    details.append(element('summary', '展开摘要'), element('p', article.abstractText));
+    body.append(details);
+  }
+  body.append(pubmed(article.pmid, 'PubMed 原文 ↗'));
+  card.append(label, body);
   return card;
 }
 
@@ -158,7 +208,7 @@ function renderResults() {
 
 function setBusy() {
   const busy = searching || reviewing || reranking;
-  for (const id of ['search-button', 'apply-filters']) byId(id).disabled = busy;
+  for (const id of ['search-button', 'browse-search-button', 'apply-filters', 'reset-filters']) byId(id).disabled = busy;
   byId('rerank').disabled = busy || !capabilities.semantic || !articles.length || Boolean(semanticOrder);
   byId('prev').disabled = busy || !pageResult || pageResult.page <= 1;
   byId('next').disabled = busy || !pageResult || pageResult.page * pageResult.limit >= pageResult.accessibleTotal;
@@ -182,7 +232,7 @@ async function loadPage(request, page, newSearch) {
     pageResult = body.data;
     lastRequest = { ...request, englishQuery: pageResult.englishQuery };
     question = request.query;
-    byId('active-question').textContent = question;
+    byId('browse-query').value = question;
     articles = pageResult.articles;
     rankings = new Map(pageResult.rankings.map(rank => [rank.pmid, rank]));
     semanticOrder = null;
@@ -199,6 +249,7 @@ async function loadPage(request, page, newSearch) {
       byId('sort').value = 'bm25';
     }
     byId('filters').hidden = !articles.length;
+    byId('local-filters').hidden = !articles.length;
     const expression = byId('expression');
     expression.querySelector('p').textContent = pageResult.pubmedQuery;
     expression.hidden = false;
@@ -217,7 +268,10 @@ async function loadPage(request, page, newSearch) {
     status.textContent = error.message + (articles.length ? ' 仍显示上一次检索结果。' : '');
     homeStatus.textContent = status.textContent;
     if (error.code === 'ENGLISH_QUERY_REQUIRED') {
+      byId('query').value = request.query;
       byId('english-options').open = true;
+      window.location.hash = 'question';
+      syncNavigation();
       byId('english').focus();
     }
   } finally {
@@ -249,6 +303,30 @@ form.onsubmit = event => {
   }, 1, true);
 };
 
+function submitQuickSearch(input) {
+  const query = input.value.trim();
+  if (!query) return;
+  byId('query').value = query;
+  byId('english').value = '';
+  loadPage({ ...searchFilters(), query, englishQuery: '' }, 1, true);
+}
+
+byId('global-search').onsubmit = event => {
+  event.preventDefault();
+  submitQuickSearch(byId('global-query'));
+};
+byId('browse-search').onsubmit = event => {
+  event.preventDefault();
+  submitQuickSearch(byId('browse-query'));
+};
+byId('reset-filters').onclick = () => {
+  for (const id of ['from-year', 'to-year', 'publication-type', 'filter']) byId(id).value = '';
+  byId('page-size').value = '10';
+  byId('abstract-only').checked = false;
+  byId('sort').value = 'bm25';
+  if (lastRequest) loadPage({ ...lastRequest, ...searchFilters() }, 1, true);
+};
+
 byId('apply-filters').onclick = () => {
   if (!lastRequest) {
     window.location.hash = 'question';
@@ -272,7 +350,7 @@ byId('edit-expression').onclick = () => {
 };
 for (const example of document.querySelectorAll('.example')) {
   example.onclick = () => {
-    byId('query').value = example.textContent.trim();
+    byId('query').value = example.dataset.query;
     byId('english').value = '';
     byId('query').focus();
   };
@@ -310,8 +388,10 @@ function renderReview(review) {
   target.append(element('h3', '研究问题'), element('p', review.question ?? question));
   for (const [label, key] of [['主要发现', 'findings'], ['一致性', 'agreement'], ['分歧', 'differences'],
     ['研究局限', 'limitations'], ['综合结论', 'conclusion']]) {
-    const group = element('section');
-    group.append(element('h3', label));
+    const group = element('section', '', 'detail-abstract');
+    const header = element('div', '', 'detail-section-head');
+    header.append(element('h3', label));
+    group.append(header);
     if (!review[key]?.length) group.append(element('p', '所选摘要未提供足够证据。', 'note'));
     else {
       const list = element('ul');
@@ -339,7 +419,7 @@ function renderReview(review) {
       ['作者报告的发现','finding'], ['局限','limitation'], ['模型解读','interpretation']]) {
       group.append(element('p', label + ' · ' + (item[key] ?? '摘要未提供')));
     }
-    group.append(element('blockquote', item.quote));
+    group.append(element('blockquote', item.quote, 'evidence-quote'));
     if (reference?.abstractText) {
       const original = element('details');
       original.append(element('summary', '查看 PubMed 摘要'), element('p', reference.abstractText, 'abstract'));
@@ -437,16 +517,26 @@ byId('export-review').onclick = () => {
 };
 
 function syncNavigation() {
-  const pages = ['question', 'literature', 'review'];
-  const section = window.location.hash.slice(1);
+  const pages = ['question', 'literature', 'detail', 'review'];
+  const [section, pmid] = window.location.hash.slice(1).split('/');
   const active = pages.includes(section) ? section : 'question';
   for (const id of pages) byId(id).hidden = id !== active;
+  if (active === 'detail') {
+    const article = articles.find(item => item.pmid === pmid) ?? selected.get(pmid);
+    if (article) renderPaperDetail(article);
+    else {
+      byId('detail-crumb').textContent = '';
+      byId('paper-detail-content').replaceChildren(element('p', '请返回文献列表重新查找该记录。', 'detail-missing'));
+    }
+  }
   const selection = byId('reading-tools');
   const parent = byId(active === 'review' ? 'review-selection' : 'browse-grid');
   if (selection.parentElement !== parent) parent.append(selection);
   byId('view-review').hidden = active === 'review';
   for (const link of document.querySelectorAll('.nav-list a')) {
-    if (link.getAttribute('href') === '#' + active) link.setAttribute('aria-current', 'page');
+    const matches = link.getAttribute('href') === '#' + (active === 'detail' ? 'literature' : active);
+    link.classList.toggle('active', matches);
+    if (matches) link.setAttribute('aria-current', 'page');
     else link.removeAttribute('aria-current');
   }
 }
