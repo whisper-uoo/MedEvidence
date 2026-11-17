@@ -76,8 +76,19 @@ footer a { text-decoration: underline; }
   font-weight: 100 900;
   font-display: swap;
 }
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("assets/fonts/JetBrainsMono-Regular.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+code, pre, kbd {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-weight: 400;
+}
 :root {
-  font-family: Inter, "Noto Sans CJK SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  font-family: Inter, "PingFang SC", "Source Han Sans SC", "Noto Sans CJK SC", "Microsoft YaHei", system-ui, sans-serif;
   font-weight: 400;
   line-height: 1.55;
 }

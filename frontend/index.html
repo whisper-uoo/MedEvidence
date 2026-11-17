@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="evidence.css">
   <link rel="stylesheet" href="navigation.css">
   <link rel="stylesheet" href="literature.css">
+  <link rel="stylesheet" href="models.css">
   <script type="module" src="search.js"></script>
 </head>
 <body>
@@ -207,21 +208,44 @@
         <div id="tasks-content" class="route-body"></div>
       </section>
 
-      <section id="models" aria-labelledby="models-title" hidden>
-        <header class="page-heading"><h1 id="models-title">模型配置</h1><p>核对模型服务和综述所需的后端配置。</p></header>
-        <div class="route-body models-panel">
-          <dl id="model-settings" class="route-settings"></dl>
-          <div class="route-toolbar">
-            <button id="refresh-model-settings" type="button" class="detail-back">刷新配置状态</button>
-            <button id="test-model" type="button" class="detail-back" disabled>测试模型连接</button>
+      <section id="models-view" aria-labelledby="models-title" hidden>
+        <header class="page-heading models-heading">
+          <div><h1 id="models-title">模型配置</h1><p>查看 AI 模型和综述数据库的可用状态。</p></div>
+          <button id="refresh-model-settings" type="button" class="detail-back">刷新配置状态</button>
+        </header>
+        <div class="models-layout">
+          <div class="service-cards">
+            <section class="service-card" aria-labelledby="model-card-title">
+              <header><h2 id="model-card-title">AI 模型服务</h2><span class="service-status" id="model-card-status" data-state="unknown">待检查</span></header>
+              <p id="model-card-message" role="status">读取后端配置中…</p>
+              <div class="service-actions">
+                <button id="test-model" type="button" class="detail-back service-primary" disabled>测试模型连接</button>
+              </div>
+              <p id="model-connection" class="service-result" role="status" hidden></p>
+            </section>
+            <section class="service-card" aria-labelledby="database-card-title">
+              <header><h2 id="database-card-title">MySQL 数据库</h2><span class="service-status" id="database-card-status" data-state="unknown">待检查</span></header>
+              <p id="database-card-message" role="status">读取连接和任务表状态中…</p>
+            </section>
           </div>
-          <p id="model-connection" class="detail-notice" role="status"></p>
-          <h2>后端环境变量</h2>
-          <dl class="route-settings">
-            <div><dt><code>AI_BASE_URL</code>、<code>AI_MODEL</code></dt><dd>OpenAI 兼容服务地址和模型名称。</dd></div>
-            <div><dt><code>AI_API_KEY</code></dt><dd>在后端环境变量或 <code>.env</code> 中设置，修改后重启后端。页面不会读取或显示密钥。</dd></div>
-            <div><dt><code>REVIEW_DB_*</code></dt><dd>启用持久化综述需要 MySQL 连接及数据库迁移。</dd></div>
-          </dl>
+
+          <section class="config-card" aria-labelledby="config-card-title">
+            <header><h2 id="config-card-title">后端环境变量</h2><p>在后端运行环境中设置，保存后重启服务，再刷新此页。</p></header>
+            <dl class="config-rows">
+              <div><dt><span>服务地址</span><code>AI_BASE_URL</code></dt><dd>OpenAI 兼容接口的基础地址，例如 <code>https://api.openai.com/v1</code>。</dd></div>
+              <div><dt><span>模型名称</span><code>AI_MODEL</code></dt><dd>供应商提供的模型标识。所用模型需支持 Chat Completions 和 JSON 对象输出。</dd></div>
+              <div><dt><span>访问密钥</span><code>AI_API_KEY</code></dt><dd>仅保存在服务器环境变量或后端 <code>.env</code>。页面只显示配置状态。</dd></div>
+            </dl>
+          </section>
+
+          <section class="config-card" aria-labelledby="database-config-title">
+            <header><h2 id="database-config-title">综述数据库</h2><p>MySQL 保存分析任务与综述结果。启用前需按 README 初始化任务表。</p></header>
+            <dl class="config-rows">
+              <div><dt><span>数据库地址</span><code>REVIEW_DB_URL</code></dt><dd>指向已初始化的 MySQL 数据库的 JDBC 地址。</dd></div>
+              <div><dt><span>数据库账户</span><code>REVIEW_DB_USER</code></dt><dd>使用可读取、写入和更新综述任务的业务账户。</dd></div>
+              <div><dt><span>数据库密码</span><code>REVIEW_DB_PASSWORD</code></dt><dd>由后端保管，页面不会显示数据库连接信息。</dd></div>
+            </dl>
+          </section>
         </div>
       </section>
 

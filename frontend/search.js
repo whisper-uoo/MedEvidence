@@ -871,54 +871,96 @@ byId('filter').oninput = renderResults;
 byId('sort').onchange = renderResults;
 byId('abstract-only').onchange = renderResults;
 
-function showModelSettings(model, review) {
-  const list = byId('model-settings');
-  list.replaceChildren();
-  for (const [label, value] of [['模型配置', model], ['证据综述配置', review]]) {
-    const line = element('div');
-    line.append(element('dt', label), element('dd', value));
-    list.append(line);
+function setServiceCard(service, state, label, message) {
+  const indicator = byId(service + '-card-status');
+  indicator.dataset.state = state;
+  indicator.textContent = label;
+  const content = byId(service + '-card-message');
+  const parts = message.split(/((?:AI|REVIEW_DB)_[A-Z_]+)/);
+  content.replaceChildren(...parts.map((part, index) => index % 2 ? element('code', part) : part));
+}
+
+async function refreshCapabilities() {
+  try {
+    capabilities = (await api('/capabilities')).data;
+    byId('model-state').textContent = capabilities.semantic ? '' : '模型未配置';
+    if (!capabilities.review && !reviewing && !currentReview) {
+      reviewStatus.textContent = '需要配置模型与 MySQL 才能生成综述。';
+    }
+  } catch {
+    capabilities = { semantic: false, review: false };
+    byId('model-state').textContent = '无法读取后端配置';
   }
+  setBusy();
 }
 
 let checkingModel = false;
-async function refreshCapabilities() {
-  byId('refresh-model-settings').disabled = true;
-  byId('test-model').disabled = true;
+let checkingSettings = false;
+let loadedSettings = false;
+let modelConfigured = false;
+
+function setModelButtons() {
+  byId('refresh-model-settings').disabled = checkingSettings || checkingModel;
+  byId('test-model').disabled = checkingSettings || checkingModel || !modelConfigured;
+}
+
+async function refreshModelSettings() {
+  if (checkingSettings || checkingModel) return;
+  checkingSettings = true;
+  setModelButtons();
+  byId('model-connection').hidden = true;
+  setServiceCard('model', 'unknown', '检查中', '正在读取后端配置…');
+  setServiceCard('database', 'unknown', '检查中', '正在读取连接和任务表状态…');
   try {
-    capabilities = (await api('/capabilities')).data;
-    setBusy();
-    byId('model-state').textContent = capabilities.semantic ? '' : '模型未配置';
-    showModelSettings(
-      capabilities.semantic ? '已配置，可主动测试连接。' : '未配置模型地址、名称或密钥。',
-      capabilities.review ? '模型与 MySQL 参数已配置。' : '需要配置模型与 MySQL。');
-    if (!capabilities.review && !reviewing && !currentReview) reviewStatus.textContent = '需要配置模型与 MySQL 才能生成综述。';
-  } catch {
-    capabilities = { semantic: false, review: false };
-    setBusy();
-    byId('model-state').textContent = '无法读取后端配置';
-    showModelSettings('后端暂不可达。', '未能读取配置。');
+    const { data } = await api('/models/status');
+    modelConfigured = data.modelConfigured;
+    loadedSettings = true;
+    setServiceCard('model', modelConfigured ? 'configured' : 'unconfigured',
+      modelConfigured ? '已配置 · 待测试' : '未配置',
+      modelConfigured ? '配置项齐全。点击测试可验证模型服务是否响应。'
+        : `请在后端设置 ${data.missingModelSettings.join('、')}。`);
+    const database = data.database;
+    const labels = { CONNECTED: '连接正常', UNCONFIGURED: '未配置', ERROR: '检查失败' };
+    setServiceCard('database', database.state.toLowerCase(), labels[database.state], database.message);
+  } catch (error) {
+    modelConfigured = false;
+    loadedSettings = false;
+    const guidance = error.code === 'LOCAL_REVIEW_ONLY'
+      ? '请在运行后端的机器上通过本机地址打开此页面。'
+      : '请确认后端已启动且浏览器可访问，然后刷新状态。';
+    const message = error.message + ' ' + guidance;
+    setServiceCard('model', 'error', '状态不可用', message);
+    setServiceCard('database', 'error', '状态不可用', message);
   } finally {
-    byId('refresh-model-settings').disabled = false;
-    byId('test-model').disabled = !capabilities.semantic || checkingModel;
+    checkingSettings = false;
+    setModelButtons();
   }
 }
 
-byId('refresh-model-settings').onclick = refreshCapabilities;
+byId('refresh-model-settings').onclick = () => {
+  refreshModelSettings();
+  refreshCapabilities();
+};
 byId('test-model').onclick = async () => {
-  if (checkingModel || !capabilities.semantic) return;
+  if (checkingModel || checkingSettings || !modelConfigured) return;
   checkingModel = true;
-  byId('test-model').disabled = true;
+  setModelButtons();
   const result = byId('model-connection');
-  result.textContent = '正在发起一次最小模型请求…';
+  result.hidden = true;
+  setServiceCard('model', 'unknown', '测试中', '正在向配置的模型发起一次验证请求…');
   try {
     const response = await api('/models/connection-test', {}, 65000);
+    setServiceCard('model', 'connected', '连接正常', '本次测试已收到有效的模型响应。');
+    result.dataset.state = 'connected';
     result.textContent = response.message;
   } catch (error) {
-    result.textContent = error.message;
+    setServiceCard('model', 'error', '测试失败', '模型配置项已填写，当前连接未通过验证。');
+    result.dataset.state = 'error';
+    result.textContent = error.message + (error.code ? '' : ' 请确认后端与模型服务均可访问。');
   } finally {
+    result.hidden = false;
     checkingModel = false;
-    byId('test-model').disabled = !capabilities.semantic;
+    setModelButtons();
   }
 };
 
@@ -950,7 +992,7 @@ function syncNavigation() {
   const [section, pmid, parentRoute] = window.location.hash.slice(1).split('/');
   const detailParent = parentRoute === 'library' ? 'library' : 'literature';
   const active = pages.includes(section) ? section : 'question';
-  for (const id of pages) byId(id).hidden = id !== active;
+  for (const id of pages) byId(id === 'models' ? 'models-view' : id).hidden = id !== active;
   byId('global-search').hidden = active === 'question' || active === 'literature';
   byId('workspace-label').hidden = !byId('global-search').hidden;
   if (active === 'detail') {
@@ -967,6 +1009,7 @@ function syncNavigation() {
   const rerankTarget = byId(active === 'ranking' ? 'ranking-action' : 'local-filters');
   if (byId('rerank').parentElement !== rerankTarget) rerankTarget.append(byId('rerank'));
   if (active === 'library') renderLibrary();
+  if (active === 'models' && !loadedSettings) refreshModelSettings();
   if (active === 'literature') renderResults();
   if (active === 'ranking') renderRanking();
   if (active === 'comparison') renderComparisonRoute();

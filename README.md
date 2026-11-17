@@ -39,7 +39,7 @@ python3 -m http.server 5173 --bind 127.0.0.1 --directory frontend
 
 - **研究空间**包含研究工作台、文献检索、我的文献库和检索历史。收藏与阅读清单独立；文献库最多保存 200 篇，可筛选、移除或整库导出。
 - **智能分析**包含智能文献排序、证据对比、AI 证据综述和分析任务。切换页面复用内存中的当前检索、选择、重排与综述结果。分析任务列表可手动刷新状态或重新打开结果。
-- **系统**提供模型配置状态与手动连接测试。测试会向后端已配置的模型发起一次短请求；服务只返回测试结果，密钥由后端保管。
+- **系统**提供模型配置状态、MySQL 连接与任务表读取检查，以及手动模型连接测试。模型测试会发起一次短请求。状态接口仅在本机可用，返回诊断结果，密钥与连接值由后端保管。
 
 ### 本机历史与导出
 
@@ -123,4 +123,4 @@ node --input-type=module --check < frontend/search.js
 
 - PubMed ESearch 最多可翻阅前 10,000 篇。BM25 对标题加权，分数仅在当前候选页内可比较。BM25 和 AI 评分都用于排序，无法衡量概率、证据质量或消除漏召回。中文映射词表有限，请核对检索式。 [NCBI E-utilities 参数文档](https://www.ncbi.nlm.nih.gov/sites/books/NBK25499/)
 - AI 内容基于摘要，长摘要的模型输入可能被截短。结果标记缺摘要来源，并校验 PMID 与原文引句。人工仍需检查陈述是否受引用支持，尤其是因果和证据强度。AI 结果未经人工专家审核，仅用于科研信息辅助，不用于个体诊断或治疗决策。
-- 综述采用本机单用户模式，后端默认绑定回环地址，任务接口拒绝非回环请求。请勿通过公共反向代理转发这些任务接口。源码采用 MIT 许可证。自托管的 [Inter 字体](https://github.com/rsms/inter) 使用 SIL Open Font License 1.1，许可文件见 `frontend/assets/fonts/Inter-OFL.txt`。PubMed 摘要和文献内容遵循来源条款。 [NCBI 使用政策与摘要版权](https://www.ncbi.nlm.nih.gov/home/about/policies/)
+- 综述采用本机单用户模式，后端默认绑定回环地址，任务接口拒绝非回环请求。请勿通过公共反向代理转发这些任务接口。源码采用 MIT 许可证。自托管的 [Inter 字体](https://github.com/rsms/inter)和 [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) 使用 SIL Open Font License 1.1，许可文件位于 `frontend/assets/fonts/`。PubMed 摘要和文献内容遵循来源条款。 [NCBI 使用政策与摘要版权](https://www.ncbi.nlm.nih.gov/home/about/policies/)

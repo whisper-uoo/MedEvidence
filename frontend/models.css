@@ -1,0 +1,36 @@
+#models-view { max-width: 960px; }
+.models-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+.models-heading h1 { color: #202a26; font-weight: 500; }
+.models-heading p, .config-card > header p { color: #4d5954; font-size: 14px; line-height: 1.6; }
+.models-heading button { min-height: 34px; }
+.models-layout { display: grid; gap: 16px; padding-block: 22px 28px; }
+.service-cards { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+.service-card, .config-card { min-width: 0; padding: 18px 20px; border: 1px solid #dfe6e1; border-radius: 12px; background: #fff; box-shadow: 0 3px 12px #26342c06; }
+.service-card { min-height: 142px; }
+.service-card header { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 6px 12px; }
+.service-card h2, .config-card h2 { margin: 0; color: #26322b; font-size: 16px; font-weight: 550; line-height: 1.45; }
+.service-card p, .config-rows dd { margin: 8px 0 0; color: #3f4b45; font-size: 13px; line-height: 1.65; overflow-wrap: anywhere; }
+.service-status { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 2px 8px; border-radius: 6px; background: #eef1ef; color: #46534c; font-size: 12px; font-weight: 500; }
+.service-status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.service-status[data-state=connected] { background: #e9f3ec; color: #27593b; }
+.service-status[data-state=unconfigured] { background: #fff2dd; color: #75521e; }
+.service-status[data-state=error] { background: #fceee9; color: #853d2f; }
+.service-actions { margin-top: 12px; }
+.service-actions button { min-height: 34px; }
+.service-primary { background: #314b3b; border-color: #314b3b; color: #fff; }
+.service-primary:hover:not(:disabled) { background: #3f5b4a; }
+.service-primary:disabled { background: #edf1ee; border-color: #e1e8e3; color: #57645d; opacity: 1; }
+.service-card .service-result { padding: 8px 10px; border-radius: 7px; background: #edf5ef; color: #295c40; }
+.service-card .service-result[data-state=error] { background: #fff1ea; color: #823f32; }
+.config-card > header p { margin: 4px 0 10px; font-size: 13px; }
+.config-rows { margin: 0; }
+.config-rows > div { display: grid; grid-template-columns: minmax(168px,.42fr) minmax(0,1fr); gap: 12px; padding-block: 11px; border-top: 1px solid #ebefec; }
+.config-rows dt { display: grid; gap: 4px; align-content: start; color: #35413a; font-size: 13px; font-weight: 500; }
+.config-rows code { color: #303b34; font-size: 12px; overflow-wrap: anywhere; }
+.config-rows dt code { width: fit-content; max-width: 100%; padding: 2px 5px; border-radius: 4px; background: #edf1ef; }
+.config-rows dd { margin: 0; align-self: center; }
+@media (max-width: 760px) {
+  .service-cards { grid-template-columns: minmax(0,1fr); }
+  .config-rows > div { grid-template-columns: minmax(0,1fr); gap: 6px; }
+  .service-card, .config-card { padding: 14px 16px; }
+}
