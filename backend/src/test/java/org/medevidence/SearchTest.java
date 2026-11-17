@@ -62,6 +62,16 @@ class SearchTest {
     }
 
     @Test
+    void rejectsUnclosedEnglishQueryDelimiters() throws Exception {
+        send("""
+            {"query":"(metformin AND asthma"}
+            """).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_QUERY"));
+        send("""
+            {"query":"哮喘","englishQuery":"asthma[Title/Abstract"}
+            """).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_QUERY"));
+    }
+
+    @Test
     void adaptsChineseAndReturnsArticle() throws Exception {
         send("{\"query\":\"二甲双胍对2型糖尿病患者的效果？\"}").andExpect(status().isOk())
             .andExpect(jsonPath("$.data.pubmedQuery").value(org.hamcrest.Matchers.containsString("Metformin")))

@@ -18,6 +18,7 @@ final class ModelClient {
     private final String key;
     private final String model;
     private final ObjectMapper json;
+    private final ObjectReader modelJson;
     private final Duration timeout;
     private final HttpClient http;
     private final Semaphore slots = new Semaphore(2);
@@ -26,6 +27,8 @@ final class ModelClient {
                 @Value("${ai.api-key:}") String key, @Value("${ai.model:}") String model,
                 @Value("${ai.timeout:25s}") Duration timeout) {
         this.json = json;
+        this.modelJson = json.reader().with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS,
+            DeserializationFeature.FAIL_ON_READING_DUP_TREE_KEY);
         this.key = key;
         this.model = model;
         this.timeout = timeout;
@@ -86,9 +89,11 @@ final class ModelClient {
             if (response.statusCode() != 200) {
                 throw new SearchProblem(BAD_GATEWAY, "AI_HTTP_ERROR", "模型接口返回异常状态，请检查配置。");
             }
-            var content = json.readTree(response.body()).path("choices").path(0).path("message").path("content");
+            JsonNode envelope = modelJson.readTree(response.body());
+            if (envelope == null || !envelope.isObject()) throw invalid();
+            var content = envelope.path("choices").path(0).path("message").path("content");
             if (!content.isTextual()) throw invalid();
-            JsonNode result = json.reader().with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).readTree(content.asText());
+            JsonNode result = modelJson.readTree(content.asText());
             if (result == null || !result.isObject()) throw invalid();
             return result;
         } catch (TimeoutException ex) {

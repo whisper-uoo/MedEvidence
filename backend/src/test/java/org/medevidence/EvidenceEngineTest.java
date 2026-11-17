@@ -36,6 +36,10 @@ class EvidenceEngineTest {
             """));
         assertEquals("2", engine.rerank("asthma", ranked).get(0).article().pmid());
         assertEquals("AI_INVALID_RESPONSE", assertThrows(SearchProblem.class, () -> engine.rerank("asthma", ranked)).code);
+        when(model.ask(anyString(), any())).thenReturn(json.readTree("""
+            {"scores":[{"pmid":"2","score":90,"reason":"first"},{"pmid":"2","score":50,"reason":"duplicate"}]}
+            """));
+        assertEquals("AI_INVALID_RESPONSE", assertThrows(SearchProblem.class, () -> engine.rerank("asthma", ranked)).code);
     }
 
     @Test

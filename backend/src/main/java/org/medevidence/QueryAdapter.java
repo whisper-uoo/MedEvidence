@@ -62,10 +62,10 @@ final class QueryAdapter {
             if (HAN.matcher(englishQuery).find()) {
                 throw new SearchProblem(BAD_REQUEST, "INVALID_QUERY", "补充检索词须使用英文。");
             }
-            return englishQuery.strip();
+            return validateEnglishSyntax(englishQuery.strip());
         }
         if (!HAN.matcher(question).find()) {
-            return question.strip();
+            return validateEnglishSyntax(question.strip());
         }
 
         var concepts = new LinkedHashSet<String>();
@@ -94,6 +94,42 @@ final class QueryAdapter {
             throw unsupported();
         }
         return String.join(" AND ", concepts);
+    }
+
+    private String validateEnglishSyntax(String query) {
+        int groups = 0;
+        boolean quoted = false;
+        boolean field = false;
+        for (int i = 0; i < query.length(); i++) {
+            char next = query.charAt(i);
+            if (next == '"' && !field) {
+                quoted = !quoted;
+            } else if (!quoted) {
+                switch (next) {
+                    case '[' -> {
+                        if (field) throw malformedQuery();
+                        field = true;
+                    }
+                    case ']' -> {
+                        if (!field) throw malformedQuery();
+                        field = false;
+                    }
+                    case '(' -> {
+                        if (!field) groups++;
+                    }
+                    case ')' -> {
+                        if (!field && --groups < 0) throw malformedQuery();
+                    }
+                    default -> { }
+                }
+            }
+        }
+        if (quoted || field || groups != 0) throw malformedQuery();
+        return query;
+    }
+
+    private SearchProblem malformedQuery() {
+        return new SearchProblem(BAD_REQUEST, "INVALID_QUERY", "检索式中的引号、括号或字段标签未成对闭合。");
     }
 
     private void validate(String value) {
