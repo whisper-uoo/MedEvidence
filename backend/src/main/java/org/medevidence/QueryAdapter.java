@@ -34,7 +34,20 @@ final class QueryAdapter {
         Map.entry("糖化血红蛋白水平", "Glycated Hemoglobin"),
         Map.entry("患病风险", "Disease Risk"),
         Map.entry("成年人", "Adult"),
-        Map.entry("成人", "Adult")
+        Map.entry("成人", "Adult"),
+        Map.entry("睡眠不足", "Sleep Deprivation"),
+        Map.entry("睡眠剥夺", "Sleep Deprivation"),
+        Map.entry("大学生", "Students"),
+        Map.entry("记忆能力", "Memory"),
+        Map.entry("记忆", "Memory")
+    );
+    private static final Map<String, String> SYNONYMS = Map.of(
+        "2型糖尿病", "\"type 2 diabetes\"[Title/Abstract] OR T2DM[Title/Abstract]",
+        "二型糖尿病", "\"type 2 diabetes\"[Title/Abstract] OR T2DM[Title/Abstract]",
+        "大学生", "\"college students\"[Title/Abstract] OR \"university students\"[Title/Abstract]",
+        "睡眠不足", "\"insufficient sleep\"[Title/Abstract] OR \"sleep restriction\"[Title/Abstract]",
+        "记忆能力", "\"memory performance\"[Title/Abstract]",
+        "糖化血红蛋白", "HbA1c[Title/Abstract]"
     );
     private static final Pattern TOKENS = Pattern.compile(
         String.join("|", TERMS.keySet().stream()
@@ -66,7 +79,11 @@ final class QueryAdapter {
             end = tokens.end();
             String term = TERMS.get(tokens.group());
             if (term != null) {
-                concepts.add("(\"" + term + "\"[MeSH Terms] OR \"" + term + "\"[Title/Abstract])");
+                String synonym = SYNONYMS.get(tokens.group());
+                String mesh = tokens.group().equals("大学生") ? "" : "\"" + term + "\"[MeSH Terms] OR ";
+                String text = tokens.group().equals("大学生") ? synonym
+                    : mesh + "\"" + term + "\"[Title/Abstract]" + (synonym == null ? "" : " OR " + synonym);
+                concepts.add("(" + text + ")");
             } else if (tokens.group().equals("随机对照试验")) {
                 concepts.add("\"Randomized Controlled Trial\"[Publication Type]");
             } else if (tokens.group().equals("系统评价")) {

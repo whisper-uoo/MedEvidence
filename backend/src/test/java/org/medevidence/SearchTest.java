@@ -14,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class SearchTest {
     private HttpServer upstream;
     private MockMvc api;
+    private volatile String upstreamQuery;
     private volatile int status = 200;
     private volatile long delay;
     private volatile String search = "<eSearchResult><Count>1</Count><IdList><Id>123</Id></IdList></eSearchResult>";
@@ -31,6 +32,7 @@ class SearchTest {
         upstream = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         upstream.createContext("/", exchange -> {
             try {
+                if (exchange.getRequestURI().getPath().contains("esearch")) upstreamQuery = exchange.getRequestURI().getQuery();
                 Thread.sleep(delay);
                 byte[] body = (exchange.getRequestURI().getPath().contains("efetch") ? fetch : search)
                     .getBytes(StandardCharsets.UTF_8);
@@ -45,8 +47,8 @@ class SearchTest {
         });
         upstream.start();
         var base = java.net.URI.create("http://127.0.0.1:" + upstream.getAddress().getPort() + "/");
-        api = MockMvcBuilders.standaloneSetup(new LiteratureController(new QueryAdapter(),
-            new PubMedClient(base, java.time.Duration.ofSeconds(1), "", ""), org.mockito.Mockito.mock(ModelClient.class), null))
+        api = MockMvcBuilders.standaloneSetup(new LiteratureController(new LiteratureSearch(new QueryAdapter(),
+            new PubMedClient(base, java.time.Duration.ofSeconds(1), "", ""), org.mockito.Mockito.mock(ModelClient.class), null)))
             .setControllerAdvice(new ApiErrors()).addPlaceholderValue("app.frontend-origin", "http://localhost:5173").build();
     }
 
@@ -99,6 +101,20 @@ class SearchTest {
         status = 429;
         send("{\"query\":\"asthma\"}").andExpect(status().isServiceUnavailable())
             .andExpect(header().string("Retry-After", "5")).andExpect(jsonPath("$.code").value("PUBMED_RATE_LIMITED"));
+    }
+
+    @Test
+    void paginatesAndCombinesFiltersWithExpandedTerms() throws Exception {
+        search = "<eSearchResult><Count>3</Count><IdList><Id>123</Id><Id>123</Id></IdList></eSearchResult>";
+        send("""
+            {"query":"睡眠不足是否影响大学生记忆能力","limit":1,"page":2,"fromYear":2010,"toYear":2024,"publicationType":"rct"}
+            """).andExpect(status().isOk()).andExpect(jsonPath("$.data.page").value(2))
+            .andExpect(jsonPath("$.data.rankings[0].pubmedRank").value(2))
+            .andExpect(jsonPath("$.data.articles.length()").value(1));
+        org.junit.jupiter.api.Assertions.assertTrue(upstreamQuery.contains("retstart=1"));
+        org.junit.jupiter.api.Assertions.assertTrue(upstreamQuery.contains("2010:2024[Date"));
+        org.junit.jupiter.api.Assertions.assertTrue(upstreamQuery.contains("college+students"));
+        org.junit.jupiter.api.Assertions.assertTrue(upstreamQuery.contains("Randomized+Controlled+Trial"));
     }
 
     @Test

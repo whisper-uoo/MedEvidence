@@ -15,28 +15,41 @@ final class Bm25 {
 
     static List<Ranked> rank(String query, List<Article> articles) {
         var terms = new LinkedHashSet<>(words(query.replaceAll("\\[[^\\]]*\\]", "")));
-        var documents = articles.stream().map(article ->
-            words(Objects.toString(article.title(), "") + " " + Objects.toString(article.abstractText(), ""))).toList();
-        var frequencies = documents.stream().map(words -> words.stream()
-            .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()))).toList();
-        double average = Math.max(1, documents.stream().mapToInt(List::size).average().orElse(0));
+        var titles = articles.stream().map(article -> words(Objects.toString(article.title(), ""))).toList();
+        var abstracts = articles.stream().map(article -> words(Objects.toString(article.abstractText(), ""))).toList();
+        var titleTf = frequencies(titles);
+        var abstractTf = frequencies(abstracts);
+        double titleAverage = averageLength(titles);
+        double abstractAverage = averageLength(abstracts);
         var weights = new HashMap<String, Double>();
         for (String term : terms) {
-            long count = frequencies.stream().filter(doc -> doc.containsKey(term)).count();
+            long count = java.util.stream.IntStream.range(0, articles.size())
+                .filter(i -> titleTf.get(i).containsKey(term) || abstractTf.get(i).containsKey(term)).count();
             weights.put(term, Math.log1p((articles.size() - count + 0.5) / (count + 0.5)));
         }
         var ranked = new ArrayList<Ranked>();
         for (int i = 0; i < articles.size(); i++) {
-            double lengthFactor = 1.2 * (0.25 + 0.75 * documents.get(i).size() / average);
+            double titleNorm = 0.25 + 0.75 * titles.get(i).size() / titleAverage;
+            double abstractNorm = 0.25 + 0.75 * abstracts.get(i).size() / abstractAverage;
             double score = 0;
             for (String term : terms) {
-                long frequency = frequencies.get(i).getOrDefault(term, 0L);
-                score += weights.get(term) * frequency * 2.2 / (frequency + lengthFactor);
+                double frequency = 2.0 * titleTf.get(i).getOrDefault(term, 0L) / titleNorm
+                    + abstractTf.get(i).getOrDefault(term, 0L) / abstractNorm;
+                score += weights.get(term) * frequency * 2.2 / (frequency + 1.2);
             }
             ranked.add(new Ranked(articles.get(i), score, null, null));
         }
         ranked.sort(Comparator.comparingDouble(Ranked::bm25).reversed());
         return ranked;
+    }
+
+    private static List<Map<String, Long>> frequencies(List<List<String>> fields) {
+        return fields.stream().map(tokens -> tokens.stream()
+            .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()))).toList();
+    }
+
+    private static double averageLength(List<List<String>> fields) {
+        return Math.max(1, fields.stream().mapToInt(List::size).average().orElse(0));
     }
 
     private static List<String> words(String value) {

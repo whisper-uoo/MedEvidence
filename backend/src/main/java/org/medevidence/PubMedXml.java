@@ -16,10 +16,14 @@ final class PubMedXml {
 
     Matches matches(InputStream input) {
         Element root = parse(input, "eSearchResult");
-        var ids = children(child(root, "IdList"), "Id").stream().map(Element::getTextContent).toList();
+        if (child(child(root, "ErrorList"), "FieldNotFound") != null) {
+            throw new SearchProblem(org.springframework.http.HttpStatus.BAD_REQUEST,
+                "INVALID_QUERY", "PubMed 检索式包含未知字段标签。");
+        }
+        var ids = children(child(root, "IdList"), "Id").stream().map(Element::getTextContent).map(String::strip).distinct().toList();
         try {
             long count = Long.parseLong(value(root, "Count"));
-            if (count < ids.size() || (count > 0 && ids.isEmpty())
+            if (count < ids.size()
                 || ids.stream().anyMatch(id -> !id.matches("[0-9]+"))) {
                 throw invalidResponse();
             }
@@ -64,7 +68,9 @@ final class PubMedXml {
                     .map(Element::getTextContent).filter(text -> !text.isBlank()).findFirst().orElse(null);
             }
             result.add(new Article(id, value(article, "ArticleTitle", "BookTitle"),
-                summary.isBlank() ? null : summary, authors, publication, "https://pubmed.ncbi.nlm.nih.gov/" + id + "/", value(child(article, "Journal"), "Title"), doi));
+                summary.isBlank() ? null : summary, authors, publication, "https://pubmed.ncbi.nlm.nih.gov/" + id + "/", value(child(article, "Journal"), "Title"), doi,
+                children(child(article, "PublicationTypeList"), "PublicationType").stream()
+                    .map(Element::getTextContent).map(String::strip).filter(type -> !type.isEmpty()).distinct().toList()));
         }
         return result;
     }

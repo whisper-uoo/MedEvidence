@@ -36,23 +36,26 @@ final class PubMedClient {
             + (apiKey.isBlank() ? "" : "&api_key=" + encode(apiKey));
     }
 
-    LiteratureController.SearchResult search(String query, int limit) {
+    record Page(long total, List<Article> articles) {}
+
+    Page search(String query, int limit, int offset) {
         var matches = xml.matches(get("esearch.fcgi", "&retmode=xml&sort=relevance&retmax="
-            + limit + "&term=" + encode(query)));
+            + limit + "&retstart=" + offset + "&term=" + encode(query)));
         if (matches.ids().isEmpty()) {
-            return new LiteratureController.SearchResult(query, 0, List.of());
+            if (matches.total() > offset) throw PubMedXml.invalidResponse();
+            return new Page(matches.total(), List.of());
         }
         var articles = fetch(matches.ids());
         if (articles.isEmpty()) {
             throw PubMedXml.invalidResponse();
         }
-        return new LiteratureController.SearchResult(query, matches.total(), articles);
+        return new Page(matches.total(), articles);
     }
 
     List<Article> fetch(List<String> ids) {
         var byId = xml.articles(get("efetch.fcgi", "&retmode=xml&id=" + encode(String.join(",", ids))))
             .stream().collect(Collectors.toMap(Article::pmid, article -> article, (first, duplicate) -> first));
-        return ids.stream().map(byId::get).filter(Objects::nonNull).toList();
+        return ids.stream().distinct().map(byId::get).filter(Objects::nonNull).toList();
     }
 
     private ByteArrayInputStream get(String endpoint, String parameters) {
