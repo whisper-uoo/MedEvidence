@@ -30,6 +30,25 @@ final class ReviewStore {
         return !url.isBlank() && !username.isBlank();
     }
 
+    record DatabaseStatus(String state, String message) {}
+
+    DatabaseStatus inspectConnection() {
+        if (!configured()) return new DatabaseStatus("UNCONFIGURED", "请在后端设置 REVIEW_DB_URL 和 REVIEW_DB_USER，并配置所需的数据库密码。");
+        try (var db = connection(); var sql = db.prepareStatement("""
+            SELECT id, fingerprint, state, result, error_code, message, created_at, deadline, question, pmids
+            FROM review_tasks LIMIT 0
+            """); var rows = sql.executeQuery()) {
+            return new DatabaseStatus("CONNECTED", "MySQL 连接可用，综述任务表及必要字段可读取。");
+        } catch (SQLException ex) {
+            return switch (ex.getErrorCode()) {
+                case 1044, 1045, 1142 -> new DatabaseStatus("ERROR", "数据库账户或权限有误，请检查 REVIEW_DB_USER、密码和任务表权限。");
+                case 1049 -> new DatabaseStatus("ERROR", "未找到配置的数据库，请创建数据库并核对 REVIEW_DB_URL。");
+                case 1054, 1146 -> new DatabaseStatus("ERROR", "综述任务表或字段缺失，请按 README 执行 001 和尚未应用的 002 迁移。");
+                default -> new DatabaseStatus("ERROR", "无法验证 MySQL，请检查服务是否运行、REVIEW_DB_URL 以及网络和 TLS 设置。");
+            };
+        }
+    }
+
     Submission submit(String fingerprint, String question, java.util.List<String> pmids) {
         String id = UUID.randomUUID().toString();
         try (var db = connection()) {

@@ -42,6 +42,14 @@ final class ModelClient {
         return endpoint != null && !key.isBlank() && !model.isBlank();
     }
 
+    java.util.List<String> missingSettings() {
+        var missing = new ArrayList<String>();
+        if (endpoint == null) missing.add("AI_BASE_URL");
+        if (model.isBlank()) missing.add("AI_MODEL");
+        if (key.isBlank()) missing.add("AI_API_KEY");
+        return List.copyOf(missing);
+    }
+
     void verifyConnection() {
         var reply = ask("这是连接测试，仅输出 JSON 对象 {\"ready\":true}。", Map.of());
         if (!reply.path("ready").isBoolean() || !reply.path("ready").booleanValue()) throw invalid();
@@ -68,6 +76,12 @@ final class ModelClient {
             if (response.statusCode() == 429) {
                 throw new SearchProblem(SERVICE_UNAVAILABLE, "AI_RATE_LIMITED", "模型服务请求受限。",
                     response.headers().firstValue("Retry-After").orElse(null));
+            }
+            if (response.statusCode() == 401 || response.statusCode() == 403) {
+                throw new SearchProblem(BAD_GATEWAY, "AI_AUTH_ERROR", "模型服务拒绝认证，请检查后端 AI_API_KEY 和模型访问权限。");
+            }
+            if (response.statusCode() == 404 || response.statusCode() == 400) {
+                throw new SearchProblem(BAD_GATEWAY, "AI_CONFIG_ERROR", "请检查 AI_BASE_URL、AI_MODEL，以及服务是否支持 Chat Completions 和 JSON 输出。");
             }
             if (response.statusCode() != 200) {
                 throw new SearchProblem(BAD_GATEWAY, "AI_HTTP_ERROR", "模型接口返回异常状态，请检查配置。");

@@ -26,6 +26,16 @@ final class ReviewController {
         return new ApiResponse("OK", "功能配置", new Capabilities(model.available(), model.available() && store.configured()));
     }
 
+    record ModelSettings(boolean modelConfigured, List<String> missingModelSettings, ReviewStore.DatabaseStatus database) {}
+
+    @GetMapping("/models/status")
+    ResponseEntity<ApiResponse> modelStatus(jakarta.servlet.http.HttpServletRequest http) {
+        requireLocal(http);
+        var status = new ModelSettings(model.available(), model.missingSettings(), store.inspectConnection());
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+            .body(new ApiResponse("OK", "模型配置状态", status));
+    }
+
     @PostMapping("/models/connection-test")
     ApiResponse testModel(jakarta.servlet.http.HttpServletRequest http) {
         requireLocal(http);
