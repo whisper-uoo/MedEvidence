@@ -33,3 +33,5 @@
   .evidence-table th:first-child { min-width: 84px; width: 84px; padding-inline: 8px; }
   .evidence-table th:not(:first-child), .evidence-table td { min-width: 168px; }
 }
+
+.review-caution { padding: 9px 12px; border: 1px solid #eadfc6; border-radius: 8px; background: #fff9ed; color: #604719; }

@@ -827,7 +827,7 @@ async function followReview(task, topic) {
   renderReview(currentReview, topic);
   renderComparisonRoute();
   byId('export-review').hidden = false;
-  reviewStatus.textContent = '综述已生成。';
+  reviewStatus.textContent = '综述已生成，待人工核查。';
 }
 
 async function runReview(start, topic, initialStatus) {
@@ -967,7 +967,7 @@ byId('test-model').onclick = async () => {
 byId('export-review').onclick = () => {
   if (!currentReview) return;
   const output = ['# MedEvidence 证据综述', '',
-    '> AI 生成，仅用于医学研究信息辅助。请核对 PubMed 原文；不用于个体诊疗。', '',
+    '> AI 生成 · 待人工核查。请逐条核对 PubMed 摘要。仅用于医学研究信息辅助，不用于个体诊疗。', '',
     '## 研究问题', '', markdownText(currentReview.question ?? question)];
   for (const [label, key] of reviewSections) {
     output.push('', '## ' + label, '');
