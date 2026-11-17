@@ -24,11 +24,12 @@
 
   <div class="workspace">
     <header class="topbar">
-      <form role="search" class="global-search" id="global-search">
+      <form role="search" class="global-search" id="global-search" hidden>
         <img src="assets/search.svg" alt="">
         <input id="global-query" type="search" required maxlength="1000" aria-label="搜索医学文献" placeholder="搜索医学文献、关键词…">
         <button type="submit" class="visually-hidden">搜索</button>
       </form>
+      <span class="workspace-label" id="workspace-label">循证研究工作台</span>
       <div class="topbar-right">
         <a class="sample-indicator" href="https://pubmed.ncbi.nlm.nih.gov/" target="_blank" rel="noopener noreferrer"><i aria-hidden="true"></i>PubMed ↗</a>
       </div>
@@ -61,16 +62,16 @@
             <p id="home-status" class="research-notice" role="status"></p>
           </form>
           <div class="home-resources">
-            <section class="scope-description" aria-labelledby="scope-title">
-              <strong id="scope-title">检索来源</strong>
-              <p>文献来自 PubMed。可查看检索式、论文摘要与来源记录。</p>
-              <p id="model-state" role="status">正在检查 AI 配置…</p>
+            <section aria-labelledby="history-title">
+              <header class="recent-head"><h2 id="history-title">最近检索</h2><button type="button" id="clear-searches" hidden>清空</button></header>
+              <ul id="recent-searches" class="recent-list"></ul>
             </section>
-            <nav class="home-shortcuts" aria-label="研究入口">
-              <a href="#literature" class="shortcut"><span class="shortcut-icon"><img src="assets/papers.svg" alt=""></span><span class="shortcut-text"><strong>浏览文献</strong><small>按时间和文献类型筛选</small></span><span class="shortcut-arrow" aria-hidden="true">→</span></a>
-              <a href="#review" class="shortcut"><span class="shortcut-icon"><img src="assets/evidence.svg" alt=""></span><span class="shortcut-text"><strong>证据综述</strong><small>查看已选文献与原文引文</small></span><span class="shortcut-arrow" aria-hidden="true">→</span></a>
-            </nav>
+            <section aria-labelledby="tasks-title">
+              <header class="recent-head"><h2 id="tasks-title">最近分析任务</h2><button type="button" id="clear-tasks" hidden>清空</button></header>
+              <ul id="recent-tasks" class="recent-list"></ul>
+            </section>
           </div>
+          <p id="model-state" class="note" role="status">正在检查 AI 配置…</p>
         </div>
       </section>
 
@@ -131,6 +132,10 @@
               <p>勾选搜索结果左侧的复选框，加入证据分析。</p>
               <div id="selected"></div>
               <a href="#review" class="compare-start" id="view-review">进入证据综述</a>
+              <div id="literature-export" class="export-actions" hidden>
+                <button type="button" class="detail-back" id="export-literature-md">Markdown</button>
+                <button type="button" class="detail-back" id="export-literature-bib">BibTeX</button>
+              </div>
               <button type="button" class="view-favorites" id="clear-selection" hidden>清空选择</button>
             </aside>
           </div>

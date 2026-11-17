@@ -1,3 +1,6 @@
+import { recent, remember, clearRecent } from './history.js';
+import { citation, downloadText, literatureBibtex, literatureMarkdown, markdownText } from './exports.js';
+
 const apiOrigin = window.MED_EVIDENCE_API_ORIGIN ?? 'http://localhost:8080';
 const byId = id => document.getElementById(id);
 const form = byId('search');
@@ -58,6 +61,7 @@ function renderSelected() {
   byId('clear-selection').hidden = selected.size === 0;
   byId('clear-selection').disabled = reviewing || searching;
   byId('selected-total').textContent = selected.size;
+  byId('literature-export').hidden = selected.size === 0;
   for (const article of selected.values()) {
     const line = element('div');
     const remove = element('button', '移除', 'detail-back');
@@ -213,6 +217,7 @@ function setBusy() {
   byId('prev').disabled = busy || !pageResult || pageResult.page <= 1;
   byId('next').disabled = busy || !pageResult || pageResult.page * pageResult.limit >= pageResult.accessibleTotal;
   updateReviewButton();
+  renderHistory();
 }
 
 function showNotice(message) {
@@ -232,6 +237,11 @@ async function loadPage(request, page, newSearch) {
     pageResult = body.data;
     lastRequest = { ...request, englishQuery: pageResult.englishQuery };
     question = request.query;
+    if (newSearch) {
+      const id = JSON.stringify(lastRequest);
+      remember('searches', { id, request: lastRequest, question, total: pageResult.total });
+      renderHistory();
+    }
     byId('browse-query').value = question;
     articles = pageResult.articles;
     rankings = new Map(pageResult.rankings.map(rank => [rank.pmid, rank]));
@@ -382,6 +392,64 @@ byId('rerank').onclick = async () => {
   }
 };
 
+const taskLabels = { PENDING: '排队中', RUNNING: '分析中', SUCCESS: '已完成', FAILED: '失败', TIMED_OUT: '已超时' };
+
+function renderHistory() {
+  for (const [kind, empty] of [['searches', '成功检索后，可在这里重新运行。'], ['tasks', '提交证据分析后，可在这里重新打开任务。']]) {
+    const list = byId('recent-' + kind);
+    const entries = recent(kind);
+    byId('clear-' + kind).hidden = !entries.length;
+    list.replaceChildren();
+    if (!entries.length) list.append(element('li', empty, 'recent-empty'));
+    for (const item of entries) {
+      const row = element('li');
+      const action = element('button', '', 'recent-paper');
+      action.type = 'button';
+      action.disabled = searching || reviewing || reranking;
+      const time = new Date(item.at).toLocaleString('zh-CN', { dateStyle: 'short', timeStyle: 'short' });
+      const info = kind === 'searches' ? `${item.total.toLocaleString()} 篇` : taskLabels[item.state] ?? '查看任务';
+      const title = element('span', item.question);
+      title.title = item.question;
+      action.append(title, element('small', info + ' · ' + time));
+      action.onclick = () => {
+        if (kind === 'tasks') {
+          reopenTask(item);
+        } else {
+          const request = item.request;
+          byId('query').value = request.query;
+          byId('english').value = request.englishQuery ?? '';
+          byId('from-year').value = request.fromYear ?? '';
+          byId('to-year').value = request.toYear ?? '';
+          byId('publication-type').value = request.publicationType ?? '';
+          byId('page-size').value = request.limit ?? 10;
+          loadPage(request, 1, true);
+        }
+      };
+      row.append(action);
+      list.append(row);
+    }
+  }
+}
+
+for (const kind of ['searches', 'tasks']) {
+  byId('clear-' + kind).onclick = () => {
+    clearRecent(kind);
+    renderHistory();
+  };
+}
+
+function recordTask(task, topic) {
+  remember('tasks', { id: task.id, question: task.question ?? topic, state: task.state,
+    at: Date.parse(task.createdAt) || undefined });
+  renderHistory();
+}
+
+async function reopenTask(item) {
+  if (searching || reviewing || reranking) return;
+  window.location.hash = 'review';
+  await runReview(async () => (await api('/reviews/' + item.id)).data, item.question, '正在读取任务…');
+}
+
 function renderReview(review) {
   const target = byId('review-result');
   target.replaceChildren();
@@ -430,14 +498,20 @@ function renderReview(review) {
   target.append(extracts);
 }
 
-async function followReview(task) {
+async function followReview(task, topic) {
+  let recordedState;
   const deadline = Date.now() + 165000;
   while (task.state === 'PENDING' || task.state === 'RUNNING') {
+    if (recordedState !== task.state) {
+      recordTask(task, topic);
+      recordedState = task.state;
+    }
     reviewStatus.textContent = task.state === 'PENDING' ? '任务已排队…' : '正在提取并综合摘要证据…';
     if (Date.now() >= deadline) throw new Error('等待任务状态超时。再次提交同一选题可查询原任务。');
     await new Promise(resolve => setTimeout(resolve, 2000));
     task = (await api('/reviews/' + task.id)).data;
   }
+  recordTask(task, topic);
   if (task.state !== 'SUCCESS') throw new Error(task.message ?? '综述任务失败。');
   currentReview = task.result;
   renderReview(currentReview);
@@ -445,19 +519,17 @@ async function followReview(task) {
   reviewStatus.textContent = '综述已生成。';
 }
 
-byId('review-button').onclick = async () => {
-  if (reviewing || searching || reranking || !selected.size) return;
+async function runReview(start, topic, initialStatus) {
   reviewing = true;
   setBusy();
   currentReview = null;
   byId('export-review').hidden = true;
-  reviewStatus.textContent = '正在提交任务…';
+  reviewStatus.textContent = initialStatus;
   byId('review-result').replaceChildren();
   renderSelected();
   renderResults();
   try {
-    const response = await api('/reviews', { question, pmids: [...selected.keys()] });
-    await followReview(response.data);
+    await followReview(await start(), topic);
   } catch (error) {
     reviewStatus.textContent = error.message;
   } finally {
@@ -466,6 +538,19 @@ byId('review-button').onclick = async () => {
     renderSelected();
     renderResults();
   }
+}
+
+byId('review-button').onclick = () => {
+  if (reviewing || searching || reranking || !selected.size || !capabilities.review) return;
+  const request = { question, pmids: [...selected.keys()] };
+  runReview(async () => (await api('/reviews', request)).data, question, '正在提交任务…');
+};
+
+byId('export-literature-md').onclick = () => {
+  if (selected.size) downloadText('MedEvidence-literature.md', literatureMarkdown([...selected.values()]), 'text/markdown');
+};
+byId('export-literature-bib').onclick = () => {
+  if (selected.size) downloadText('MedEvidence-literature.bib', literatureBibtex([...selected.values()]), 'application/x-bibtex');
 };
 
 byId('filter').oninput = renderResults;
@@ -481,17 +566,11 @@ try {
   byId('model-state').textContent = '无法读取后端配置';
 }
 
-function markdownText(value) {
-  return String(value ?? '').replace(/[\r\n]+/g, ' ')
-    .replace(/[\\`*_{}\[\]()#+.!|<>~-]/g, character => '\\' + character);
-}
-
 byId('export-review').onclick = () => {
   if (!currentReview) return;
   const output = ['# MedEvidence 证据综述', '',
     '> AI 生成，仅用于医学研究信息辅助。请核对 PubMed 原文；不用于个体诊疗。', '',
     '## 研究问题', '', markdownText(currentReview.question ?? question)];
-  const citation = id => `[PMID ${id}](https://pubmed.ncbi.nlm.nih.gov/${encodeURIComponent(id)}/)`;
   for (const [label, key] of [['主要发现','findings'], ['一致性','agreement'], ['分歧','differences'],
     ['研究局限','limitations'], ['综合结论','conclusion']]) {
     output.push('', '## ' + label, '');
@@ -508,12 +587,7 @@ byId('export-review').onclick = () => {
     const details = [article?.title, article?.journal, article?.publicationDate, article?.doi].filter(Boolean);
     output.push('- ' + citation(id) + (details.length ? ' · ' + details.map(markdownText).join(' · ') : ''));
   }
-  const url = URL.createObjectURL(new Blob([output.join('\n') + '\n'], { type: 'text/markdown;charset=utf-8' }));
-  const download = document.createElement('a');
-  download.href = url;
-  download.download = 'MedEvidence-review.md';
-  download.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  downloadText('MedEvidence-review.md', output.join('\n') + '\n', 'text/markdown');
 };
 
 function syncNavigation() {
@@ -521,6 +595,8 @@ function syncNavigation() {
   const [section, pmid] = window.location.hash.slice(1).split('/');
   const active = pages.includes(section) ? section : 'question';
   for (const id of pages) byId(id).hidden = id !== active;
+  byId('global-search').hidden = active === 'question' || active === 'literature';
+  byId('workspace-label').hidden = !byId('global-search').hidden;
   if (active === 'detail') {
     const article = articles.find(item => item.pmid === pmid) ?? selected.get(pmid);
     if (article) renderPaperDetail(article);
@@ -545,3 +621,5 @@ window.addEventListener('hashchange', () => {
   window.scrollTo({ top: 0, behavior: 'instant' });
 });
 syncNavigation();
+
+renderHistory();
