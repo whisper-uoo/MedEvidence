@@ -26,6 +26,13 @@ final class ReviewController {
         return new ApiResponse("OK", "功能配置", new Capabilities(model.available(), model.available() && store.configured()));
     }
 
+    @PostMapping("/models/connection-test")
+    ApiResponse testModel(jakarta.servlet.http.HttpServletRequest http) {
+        requireLocal(http);
+        model.verifyConnection();
+        return new ApiResponse("OK", "模型连接和 JSON 响应验证成功。", null);
+    }
+
     @PostMapping("/reviews")
     ResponseEntity<ApiResponse> submit(@RequestBody ReviewRequest request, jakarta.servlet.http.HttpServletRequest http) {
         requireLocal(http);
@@ -45,6 +52,6 @@ final class ReviewController {
         } catch (java.net.UnknownHostException ignored) {
             // Deny requests whose address cannot be interpreted.
         }
-        throw new SearchProblem(HttpStatus.FORBIDDEN, "LOCAL_REVIEW_ONLY", "综述任务仅支持本机单用户模式。");
+        throw new SearchProblem(HttpStatus.FORBIDDEN, "LOCAL_REVIEW_ONLY", "此功能仅支持本机单用户模式。");
     }
 }

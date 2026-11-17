@@ -42,6 +42,11 @@ final class ModelClient {
         return endpoint != null && !key.isBlank() && !model.isBlank();
     }
 
+    void verifyConnection() {
+        var reply = ask("这是连接测试，仅输出 JSON 对象 {\"ready\":true}。", Map.of());
+        if (!reply.path("ready").isBoolean() || !reply.path("ready").booleanValue()) throw invalid();
+    }
+
     JsonNode ask(String instructions, Object input) {
         if (!available()) {
             throw new SearchProblem(SERVICE_UNAVAILABLE, "AI_UNAVAILABLE", "尚未配置模型服务。");
