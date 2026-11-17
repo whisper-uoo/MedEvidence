@@ -27,7 +27,7 @@ class EvidenceEngineTest {
     @Test
     void validatesSemanticScoresAgainstCandidateSet() throws Exception {
         var model = mock(ModelClient.class);
-        var engine = new EvidenceEngine(model);
+        var engine = new EvidenceEngine(model, 20);
         var ranked = Bm25.rank("asthma", List.of(article("1", "Asthma", null), article("2", "Other", null)));
         when(model.ask(anyString(), any())).thenReturn(json.readTree("""
             {"scores":[{"pmid":"2","score":90,"reason":"relevant"},{"pmid":"1","score":10,"reason":"weak"}]}
@@ -42,7 +42,7 @@ class EvidenceEngineTest {
     void extractionRequiresVerbatimQuoteAndKnownId() throws Exception {
         var sources = List.of(new EvidenceEngine.Source("1", "Title", "An exact test fixture."));
         var rows = """
-            [{"pmid":"1","studyDesign":"Test","finding":"Test","limitation":"Test","quote":"exact test fixture"}]
+            [{"pmid":"1","population":"摘要未提供","objective":"Test","interpretation":"无法判断","studyDesign":"Test","finding":"Test","limitation":"Test","quote":"exact test fixture"}]
             """;
         assertEquals("1", EvidenceEngine.validateEvidence(json.readTree(rows), sources).get(0).pmid());
         assertThrows(SearchProblem.class, () ->

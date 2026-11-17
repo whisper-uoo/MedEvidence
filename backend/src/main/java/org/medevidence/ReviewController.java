@@ -27,14 +27,24 @@ final class ReviewController {
     }
 
     @PostMapping("/reviews")
-    ResponseEntity<ApiResponse> submit(@RequestBody ReviewRequest request) {
+    ResponseEntity<ApiResponse> submit(@RequestBody ReviewRequest request, jakarta.servlet.http.HttpServletRequest http) {
+        requireLocal(http);
         var task = tasks.submit(request.question(), request.pmids());
-        return ResponseEntity.status(task.state().equals("SUCCEEDED") ? HttpStatus.OK : HttpStatus.ACCEPTED)
+        return ResponseEntity.status(task.state().equals("SUCCESS") ? HttpStatus.OK : HttpStatus.ACCEPTED)
             .body(new ApiResponse("OK", "综述任务已受理。", task));
     }
 
     @GetMapping("/reviews/{id}")
-    ApiResponse get(@PathVariable UUID id) {
+    ApiResponse get(@PathVariable UUID id, jakarta.servlet.http.HttpServletRequest http) {
+        requireLocal(http);
         return new ApiResponse("OK", "综述任务状态", store.get(id.toString()));
+    }
+    private void requireLocal(jakarta.servlet.http.HttpServletRequest request) {
+        try {
+            if (java.net.InetAddress.getByName(request.getRemoteAddr()).isLoopbackAddress()) return;
+        } catch (java.net.UnknownHostException ignored) {
+            // Deny requests whose address cannot be interpreted.
+        }
+        throw new SearchProblem(HttpStatus.FORBIDDEN, "LOCAL_REVIEW_ONLY", "综述任务仅支持本机单用户模式。");
     }
 }

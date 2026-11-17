@@ -32,14 +32,14 @@ final class ReviewTasks {
 
     ReviewStore.Task submit(String question, List<String> pmids) {
         if (question == null || question.isBlank() || question.length() > 1000 || pmids == null || pmids.isEmpty()
-            || pmids.size() > 8 || pmids.stream().anyMatch(id -> id == null || !id.matches("[1-9][0-9]{0,11}"))) {
-            throw new SearchProblem(BAD_REQUEST, "INVALID_REVIEW", "请填写研究问题并选择 1–8 篇有效文献。");
+            || pmids.size() > 10 || pmids.stream().anyMatch(id -> id == null || !id.matches("[1-9][0-9]{0,11}"))) {
+            throw new SearchProblem(BAD_REQUEST, "INVALID_REVIEW", "请填写研究问题并选择 1–10 篇有效文献。");
         }
         if (!model.available()) throw new SearchProblem(SERVICE_UNAVAILABLE, "AI_UNAVAILABLE", "尚未配置模型服务。");
 
         var ids = pmids.stream().distinct().sorted().toList();
         String normalized = question.strip();
-        var submission = store.submit(fingerprint(normalized, ids));
+        var submission = store.submit(fingerprint(normalized, ids), normalized, ids);
         var task = submission.task();
         if (submission.created()) {
             try {
@@ -80,7 +80,7 @@ final class ReviewTasks {
     private String fingerprint(String question, List<String> ids) {
         try {
             byte[] bytes = MessageDigest.getInstance("SHA-256")
-                .digest((question + "\n" + String.join(",", ids)).getBytes(StandardCharsets.UTF_8));
+                .digest(("evidence-v2\n" + question + "\n" + String.join(",", ids)).getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(bytes);
         } catch (NoSuchAlgorithmException ex) {
             throw new IllegalStateException(ex);

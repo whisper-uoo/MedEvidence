@@ -10,7 +10,7 @@ import static org.springframework.http.HttpStatus.*;
 
 @Repository
 final class ReviewStore {
-    record Task(String id, String state, JsonNode result, String errorCode, String message) {}
+    record Task(String id, String state, JsonNode result, String errorCode, String message, String question, JsonNode pmids, java.time.Instant createdAt) {}
     record Submission(Task task, boolean created) {}
 
     private final String url;
@@ -30,18 +30,20 @@ final class ReviewStore {
         return !url.isBlank() && !username.isBlank();
     }
 
-    Submission submit(String fingerprint) {
+    Submission submit(String fingerprint, String question, java.util.List<String> pmids) {
         String id = UUID.randomUUID().toString();
         try (var db = connection()) {
             expire(db);
             try (var sql = db.prepareStatement("""
-                INSERT INTO review_tasks (id, fingerprint, state, deadline)
-                VALUES (?, ?, 'QUEUED', TIMESTAMPADD(SECOND, 150, CURRENT_TIMESTAMP(6)))
+                INSERT INTO review_tasks (id, fingerprint, question, pmids, state, deadline)
+                VALUES (?, ?, ?, ?, 'QUEUED', TIMESTAMPADD(SECOND, 150, CURRENT_TIMESTAMP(6)))
                 """)) {
                 sql.setString(1, id);
                 sql.setString(2, fingerprint);
+                sql.setString(3, question);
+                sql.setString(4, json.valueToTree(pmids).toString());
                 sql.executeUpdate();
-                return new Submission(new Task(id, "QUEUED", null, null, null), true);
+                return new Submission(find(db, "id", id), true);
             } catch (SQLIntegrityConstraintViolationException duplicate) {
                 Task existing = find(db, "fingerprint", fingerprint);
                 if (existing == null) {
@@ -118,15 +120,22 @@ final class ReviewStore {
 
     private Task find(Connection db, String column, String value) throws SQLException {
         try (var sql = db.prepareStatement("""
-            SELECT id, state, result, error_code, message FROM review_tasks WHERE
+            SELECT id, state, result, error_code, message, question, pmids, created_at FROM review_tasks WHERE
             """ + " " + column + " = ?")) {
             sql.setString(1, value);
             try (var rows = sql.executeQuery()) {
                 if (!rows.next()) return null;
                 String result = rows.getString("result");
-                return new Task(rows.getString("id"), rows.getString("state"),
+                String state = switch (rows.getString("state")) {
+                    case "QUEUED" -> "PENDING";
+                    case "SUCCEEDED" -> "SUCCESS";
+                    default -> rows.getString("state");
+                };
+                String pmids = rows.getString("pmids");
+                return new Task(rows.getString("id"), state,
                     result == null ? null : json.readTree(result), rows.getString("error_code"),
-                    rows.getString("message"));
+                    rows.getString("message"), rows.getString("question"),
+                    pmids == null ? null : json.readTree(pmids), rows.getTimestamp("created_at").toInstant());
             } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
                 throw new SQLException("Invalid saved review result", ex);
             }

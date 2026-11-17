@@ -20,6 +20,13 @@ final class LiteratureController {
                         int accessibleTotal, String englishQuery) {}
     record Ranking(String pmid, double bm25, Integer semanticScore, String reason, int pubmedRank) {}
 
+    record RerankRequest(String question, String englishQuery, List<String> pmids) {}
+
+    @PostMapping("/rerank")
+    ApiResponse rerank(@RequestBody RerankRequest request) {
+        return new ApiResponse("OK", "语义重排序完成。", search.rerank(request));
+    }
+
     @PostMapping("/search")
     ApiResponse search(@RequestBody SearchRequest request) {
         var result = search.search(request);

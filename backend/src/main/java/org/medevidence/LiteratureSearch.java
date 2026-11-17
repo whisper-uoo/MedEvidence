@@ -59,6 +59,27 @@ final class LiteratureSearch {
             notice, page, limit, (int) Math.min(result.total(), MAX_RESULTS), query);
     }
 
+    List<Ranking> rerank(LiteratureController.RerankRequest request) {
+        String query = adapter.adapt(request.question(), request.englishQuery());
+        var ids = request.pmids();
+        if (ids == null || ids.isEmpty() || ids.size() > 50 || new HashSet<>(ids).size() != ids.size()
+            || ids.stream().anyMatch(id -> id == null || !id.matches("[1-9][0-9]{0,11}"))) {
+            throw new SearchProblem(BAD_REQUEST, "INVALID_CANDIDATES", "请选择 1–50 个不重复的有效 PMID。");
+        }
+        if (!model.available()) {
+            throw new SearchProblem(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, "AI_UNAVAILABLE", "尚未配置模型。");
+        }
+        var articles = client.fetch(ids);
+        if (articles.size() != ids.size()) {
+            throw new SearchProblem(org.springframework.http.HttpStatus.BAD_GATEWAY, "SOURCE_MISSING", "PubMed 未返回全部候选文献。");
+        }
+        var positions = new HashMap<String, Integer>();
+        for (int i = 0; i < ids.size(); i++) positions.put(ids.get(i), i + 1);
+        return engine.rerank(request.question(), Bm25.rank(query, articles)).stream().map(item ->
+            new Ranking(item.article().pmid(), item.bm25(), item.semanticScore(), item.reason(),
+                positions.get(item.article().pmid()))).toList();
+    }
+
     private String filters(SearchRequest request) {
         int maxYear = Year.now().getValue() + 1;
         int start = request.fromYear() == null ? 1500 : request.fromYear();

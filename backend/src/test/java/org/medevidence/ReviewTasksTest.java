@@ -31,14 +31,14 @@ class ReviewTasksTest {
     @Test
     void duplicateSelectionUsesSameTaskAndSkipsWorker() {
         when(model.available()).thenReturn(true);
-        var existing = new ReviewStore.Task("existing", "RUNNING", null, null, null);
-        when(store.submit(anyString())).thenReturn(new ReviewStore.Submission(existing, false));
+        var existing = new ReviewStore.Task("existing", "RUNNING", null, null, null, null, null, null);
+        when(store.submit(anyString(), anyString(), anyList())).thenReturn(new ReviewStore.Submission(existing, false));
         var tasks = new ReviewTasks(store, pubmed, model, engine, new ObjectMapper());
         try {
             assertEquals(existing, tasks.submit(" Question ", List.of("2", "1")));
             assertEquals(existing, tasks.submit("Question", List.of("1", "2", "2")));
             var fingerprint = org.mockito.ArgumentCaptor.forClass(String.class);
-            verify(store, times(2)).submit(fingerprint.capture());
+            verify(store, times(2)).submit(fingerprint.capture(), anyString(), anyList());
             assertEquals(fingerprint.getAllValues().get(0), fingerprint.getAllValues().get(1));
             verifyNoInteractions(pubmed, engine);
         } finally {
@@ -49,13 +49,13 @@ class ReviewTasksTest {
     @Test
     void persistsAsyncResultForVerifiedSources() throws Exception {
         when(model.available()).thenReturn(true);
-        var task = new ReviewStore.Task("job", "QUEUED", null, null, null);
+        var task = new ReviewStore.Task("job", "QUEUED", null, null, null, null, null, null);
         var article = new Article("1", "Title", "Fixture", List.of(), null, null, null, null);
-        when(store.submit(anyString())).thenReturn(new ReviewStore.Submission(task, true));
+        when(store.submit(anyString(), anyString(), anyList())).thenReturn(new ReviewStore.Submission(task, true));
         when(store.start("job")).thenReturn(true);
         when(pubmed.fetch(List.of("1"))).thenReturn(List.of(article));
         when(engine.review("Question", List.of(article)))
-            .thenReturn(new EvidenceEngine.Review(List.of(), List.of(), List.of(), List.of(), List.of()));
+            .thenReturn(new EvidenceEngine.Review(List.of(), List.of(), List.of(), List.of(), List.of(), "Question", List.of(), List.of(), List.of()));
         var tasks = new ReviewTasks(store, pubmed, model, engine, new ObjectMapper());
         try {
             assertEquals("QUEUED", tasks.submit("Question", List.of("1")).state());
