@@ -6,6 +6,7 @@
   <title>MedEvidence · 循证研究工作台</title>
   <link rel="stylesheet" href="reference.css">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="evidence.css">
   <script type="module" src="search.js"></script>
 </head>
 <body>
@@ -160,7 +161,7 @@
                 <button type="button" class="search-submit" id="review-button" disabled>生成证据综述</button>
                 <button type="button" class="detail-back" id="export-review" hidden>导出 Markdown</button>
               </div>
-              <p id="review-status" class="detail-notice" role="status"></p>
+              <p id="review-status" class="detail-notice review-status" role="status"></p>
               <div id="review-result"></div>
             </section>
             <div id="review-selection" class="detail-sidebar"></div>

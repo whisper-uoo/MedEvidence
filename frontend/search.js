@@ -252,6 +252,7 @@ async function loadPage(request, page, newSearch) {
       selected.clear();
       currentReview = null;
       byId('export-review').hidden = true;
+      reviewStatus.removeAttribute('data-state');
       reviewStatus.textContent = capabilities.review ? '' : '配置模型与 MySQL 后可生成证据综述。';
       byId('review-result').replaceChildren();
       byId('filter').value = '';
@@ -450,13 +451,87 @@ async function reopenTask(item) {
   await runReview(async () => (await api('/reviews/' + item.id)).data, item.question, '正在读取任务…');
 }
 
-function renderReview(review) {
+const reviewSections = [['主要发现', 'findings'], ['一致性', 'agreement'], ['分歧', 'differences'],
+  ['研究局限', 'limitations'], ['综合结论', 'conclusion']];
+const evidenceFields = [['研究对象', 'population'], ['研究目的', 'objective'], ['研究方法', 'studyDesign'],
+  ['主要发现', 'finding'], ['研究局限', 'limitation']];
+
+function inReviewLink(label, target, open = false) {
+  const link = element('a', label, 'citation-link');
+  link.href = '#' + target;
+  link.onclick = event => {
+    event.preventDefault();
+    const section = byId(target);
+    if (!section) return;
+    if (open) section.open = true;
+    const focus = open ? section.querySelector('summary') : section;
+    focus.focus({ preventScroll: true });
+    section.scrollIntoView({ block: 'start' });
+  };
+  return link;
+}
+
+function renderComparison(evidence, references) {
+  const section = element('section', '', 'compare-page review-section');
+  section.id = 'review-comparison';
+  section.tabIndex = -1;
+  const toolbar = element('header', '', 'compare-toolbar');
+  const heading = element('div');
+  heading.append(element('strong', '结构化证据对比'), element('span', `${evidence.length} 篇有摘要文献`));
+  toolbar.append(heading);
+  section.append(toolbar);
+  if (!evidence.length) {
+    section.append(element('p', '当前任务没有可比较的结构化证据。', 'compare-notice'));
+    return section;
+  }
+  const scroller = element('div', '', 'compare-region');
+  scroller.tabIndex = 0;
+  scroller.setAttribute('role', 'region');
+  scroller.setAttribute('aria-label', '证据对比表，可横向滚动');
+  const table = element('table', '', 'evidence-table');
+  const caption = element('caption', '按文献比较结构化摘要证据', 'visually-hidden');
+  const header = table.createTHead().insertRow();
+  const field = element('th', '比较维度');
+  field.scope = 'col';
+  header.append(field);
+  for (const item of evidence) {
+    const column = element('th');
+    column.scope = 'col';
+    const reference = references.get(item.pmid);
+    column.append(inReviewLink('PMID ' + item.pmid, 'evidence-' + item.pmid, true));
+    if (reference?.title) column.append(element('small', reference.title));
+    header.append(column);
+  }
+  const body = table.createTBody();
+  for (const [label, key] of evidenceFields) {
+    const row = body.insertRow();
+    const rowHeader = element('th', label);
+    rowHeader.scope = 'row';
+    row.append(rowHeader);
+    for (const item of evidence) row.insertCell().textContent = item[key] ?? '摘要未提供';
+  }
+  table.prepend(caption);
+  scroller.append(table);
+  section.append(scroller);
+  return section;
+}
+
+function renderReview(review, topic) {
   const target = byId('review-result');
   target.replaceChildren();
-  target.append(element('h3', '研究问题'), element('p', review.question ?? question));
-  for (const [label, key] of [['主要发现', 'findings'], ['一致性', 'agreement'], ['分歧', 'differences'],
-    ['研究局限', 'limitations'], ['综合结论', 'conclusion']]) {
-    const group = element('section', '', 'detail-abstract');
+  const evidence = review.evidence ?? [];
+  const references = new Map((review.references ?? []).map(article => [article.pmid, article]));
+  const evidenceIds = new Set(evidence.map(item => item.pmid));
+  target.append(element('h2', review.question ?? topic, 'review-topic'));
+  const outline = element('nav', '', 'review-outline');
+  outline.setAttribute('aria-label', '证据综述章节');
+  outline.append(inReviewLink('证据对比', 'review-comparison'));
+  for (const [label, key] of reviewSections) outline.append(inReviewLink(label, 'review-' + key));
+  target.append(outline, renderComparison(evidence, references));
+  for (const [label, key] of reviewSections) {
+    const group = element('section', '', 'detail-abstract review-section');
+    group.id = 'review-' + key;
+    group.tabIndex = -1;
     const header = element('div', '', 'detail-section-head');
     header.append(element('h3', label));
     group.append(header);
@@ -465,7 +540,10 @@ function renderReview(review) {
       const list = element('ul');
       for (const point of review[key]) {
         const item = element('li', point.text + ' ');
-        for (const id of point.pmids) item.append(pubmed(id, `[${id}]`), ' ');
+        for (const id of point.pmids) {
+          const citationLink = evidenceIds.has(id) ? inReviewLink(`[PMID ${id}]`, 'evidence-' + id, true) : pubmed(id);
+          item.append(citationLink, ' ');
+        }
         list.append(item);
       }
       group.append(list);
@@ -477,25 +555,26 @@ function renderReview(review) {
     for (const id of review.missingAbstractPmids) missing.append(pubmed(id), ' ');
     target.append(missing);
   }
-  const extracts = element('details');
-  extracts.append(element('summary', '逐篇证据与摘要原文'));
-  for (const item of review.evidence) {
-    const group = element('section');
-    const reference = review.references?.find(source => source.pmid === item.pmid);
-    group.append(pubmed(item.pmid, reference?.title ?? `PMID ${item.pmid}`));
-    for (const [label, key] of [['研究对象','population'], ['目的','objective'], ['方法','studyDesign'],
-      ['作者报告的发现','finding'], ['局限','limitation'], ['模型解读','interpretation']]) {
+  const sources = element('section', '', 'detail-abstract');
+  sources.append(element('h3', '逐篇证据与摘要原文'));
+  for (const item of evidence) {
+    const group = element('details', '', 'evidence-source review-section');
+    group.id = 'evidence-' + item.pmid;
+    const reference = references.get(item.pmid);
+    group.append(element('summary', `PMID ${item.pmid}` + (reference?.title ? ' · ' + reference.title : '')),
+      pubmed(item.pmid, '查看 PubMed 原文 ↗'));
+    for (const [label, key] of [...evidenceFields, ['模型解读', 'interpretation']]) {
       group.append(element('p', label + ' · ' + (item[key] ?? '摘要未提供')));
     }
-    group.append(element('blockquote', item.quote, 'evidence-quote'));
+    if (item.quote) group.append(element('blockquote', item.quote, 'evidence-quote'));
     if (reference?.abstractText) {
       const original = element('details');
       original.append(element('summary', '查看 PubMed 摘要'), element('p', reference.abstractText, 'abstract'));
       group.append(original);
     }
-    extracts.append(group);
+    sources.append(group);
   }
-  target.append(extracts);
+  if (evidence.length) target.append(sources);
 }
 
 async function followReview(task, topic) {
@@ -506,15 +585,17 @@ async function followReview(task, topic) {
       recordTask(task, topic);
       recordedState = task.state;
     }
+    reviewStatus.dataset.state = task.state;
     reviewStatus.textContent = task.state === 'PENDING' ? '任务已排队…' : '正在提取并综合摘要证据…';
     if (Date.now() >= deadline) throw new Error('等待任务状态超时。再次提交同一选题可查询原任务。');
     await new Promise(resolve => setTimeout(resolve, 2000));
     task = (await api('/reviews/' + task.id)).data;
   }
   recordTask(task, topic);
+  reviewStatus.dataset.state = task.state;
   if (task.state !== 'SUCCESS') throw new Error(task.message ?? '综述任务失败。');
   currentReview = task.result;
-  renderReview(currentReview);
+  renderReview(currentReview, topic);
   byId('export-review').hidden = false;
   reviewStatus.textContent = '综述已生成。';
 }
@@ -524,6 +605,7 @@ async function runReview(start, topic, initialStatus) {
   setBusy();
   currentReview = null;
   byId('export-review').hidden = true;
+  reviewStatus.dataset.state = 'PENDING';
   reviewStatus.textContent = initialStatus;
   byId('review-result').replaceChildren();
   renderSelected();
@@ -531,6 +613,7 @@ async function runReview(start, topic, initialStatus) {
   try {
     await followReview(await start(), topic);
   } catch (error) {
+    if (reviewStatus.dataset.state !== 'TIMED_OUT') reviewStatus.dataset.state = 'FAILED';
     reviewStatus.textContent = error.message;
   } finally {
     reviewing = false;
@@ -571,8 +654,7 @@ byId('export-review').onclick = () => {
   const output = ['# MedEvidence 证据综述', '',
     '> AI 生成，仅用于医学研究信息辅助。请核对 PubMed 原文；不用于个体诊疗。', '',
     '## 研究问题', '', markdownText(currentReview.question ?? question)];
-  for (const [label, key] of [['主要发现','findings'], ['一致性','agreement'], ['分歧','differences'],
-    ['研究局限','limitations'], ['综合结论','conclusion']]) {
+  for (const [label, key] of reviewSections) {
     output.push('', '## ' + label, '');
     const points = currentReview[key] ?? [];
     if (!points.length) output.push('所选摘要未提供足够证据。');

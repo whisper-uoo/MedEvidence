@@ -69,6 +69,13 @@ footer a { text-decoration: underline; }
 }
 
 /* Typography and recent activity use the reference workspace's restrained hierarchy. */
+@font-face {
+  font-family: Inter;
+  src: url("assets/fonts/InterVariable.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
 :root {
   font-family: Inter, "Noto Sans CJK SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   font-weight: 400;

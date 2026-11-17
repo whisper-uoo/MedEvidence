@@ -1,4 +1,7 @@
-const key = kind => 'medevidence:' + kind + ':v1';
+const defaultApi = 'http://localhost:8080';
+const apiOrigin = window.MED_EVIDENCE_API_ORIGIN ?? defaultApi;
+const namespace = apiOrigin === defaultApi ? '' : ':' + encodeURIComponent(apiOrigin);
+const key = kind => 'medevidence:' + kind + ':v1' + namespace;
 const cache = new Map();
 const limit = 8;
 
