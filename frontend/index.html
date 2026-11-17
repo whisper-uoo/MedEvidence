@@ -22,14 +22,16 @@
       <a href="#question">循证研究工作台</a>
       <a class="source" href="https://pubmed.ncbi.nlm.nih.gov/" target="_blank" rel="noopener noreferrer">PubMed ↗</a>
     </header>
-<main>
+<main id="workspace-main">
   <section class="hero" id="question" aria-labelledby="main-title">
     <div class="intro">
       <h1 id="main-title">研究检索</h1>
       <p>检索真实医学文献，筛选研究并生成带引文的证据综述。</p>
     </div>
+    <div class="home-content">
     <form id="search">
       <label for="query">医学研究问题</label>
+      <div class="question-box">
       <textarea id="query" required maxlength="1000" rows="2" placeholder="例如，二甲双胍对 2 型糖尿病患者的效果？"></textarea>
       <div class="examples"><span>试试</span>
         <button type="button" class="secondary example">睡眠不足是否影响大学生记忆能力</button>
@@ -44,24 +46,40 @@
         <span id="model-state">正在检查 AI 配置…</span>
         <button type="submit" id="search-button">检索 PubMed</button>
       </div>
+      </div>
+      <p id="home-status" class="workspace-status" role="status"></p>
     </form>
+    <nav class="home-shortcuts" aria-label="研究入口">
+      <a href="#literature"><strong>浏览文献</strong><span>按发表时间和文献类型筛选</span><b aria-hidden="true">→</b></a>
+      <a href="#review"><strong>证据综述</strong><span>检查已选文献与原文引文</span><b aria-hidden="true">→</b></a>
+    </nav>
+    </div>
   </section>
-  <div class="workspace">
+  <section id="literature" class="view-page" aria-labelledby="browse-title" hidden>
+    <div class="intro page-heading">
+      <h1 id="browse-title">文献浏览</h1>
+      <p>查看 PubMed 候选文献，筛选并选择需要核读的研究。</p>
+    </div>
+    <div class="browse-query">
+      <span id="active-question">尚未提交研究问题</span>
+      <a class="secondary link-button" href="#question">修改研究问题</a>
+    </div>
+  <div class="workspace" id="browse-grid">
     <section class="search-facets" aria-labelledby="facet-title">
       <h2 id="facet-title">检索条件</h2>
       <div class="year-range">
-        <label>起始年份<input form="search" id="from-year" type="number" min="1500" placeholder="不限"></label>
-        <label>截止年份<input form="search" id="to-year" type="number" min="1500" placeholder="不限"></label>
+        <label>起始年份<input id="from-year" type="number" min="1500" placeholder="不限"></label>
+        <label>截止年份<input id="to-year" type="number" min="1500" placeholder="不限"></label>
       </div>
-      <label>文献类型<select form="search" id="publication-type">
+      <label>文献类型<select id="publication-type">
         <option value="">全部类型</option><option value="rct">随机对照试验</option>
         <option value="systematic">系统评价</option><option value="meta">Meta 分析</option>
         <option value="review">综述</option><option value="clinical">临床试验</option>
       </select></label>
-      <label>每页篇数<select form="search" id="page-size"><option>10</option><option>20</option><option>30</option><option>50</option></select></label>
-      <button type="submit" form="search" class="secondary" id="apply-filters">应用条件</button>
+      <label>每页篇数<select id="page-size"><option>10</option><option>20</option><option>30</option><option>50</option></select></label>
+      <button type="button" class="secondary" id="apply-filters">应用条件</button>
     </section>
-    <section class="literature" id="literature" aria-labelledby="results-title">
+    <section class="literature" aria-labelledby="results-title">
       <header class="section-head">
         <h2 id="results-title">文献结果</h2>
         <p id="status" role="status">输入研究问题开始检索。</p>
@@ -81,17 +99,32 @@
         <button type="button" class="secondary" id="next">下一页</button>
       </div>
     </section>
-    <aside class="reading-tools" id="review" aria-labelledby="review-title">
-      <header class="section-head"><h2 id="review-title">证据综述</h2><p id="selection-count">已选 0 / 10 篇</p></header>
+    <aside class="reading-tools" id="reading-tools" aria-labelledby="review-title">
+      <header class="section-head"><h2 id="review-title">阅读清单</h2><p id="selection-count">已选 0 / 10 篇</p></header>
       <div id="selected"></div>
       <button type="button" class="secondary" id="clear-selection" hidden>清空选择</button>
+      <p id="selection-hint" class="note">在文献列表勾选文章，集中比较摘要并生成综述。</p>
+      <a href="#review" class="primary link-button" id="view-review">进入证据综述 →</a>
+    </aside>
+  </div>
+  </section>
+  <section id="review" class="view-page" aria-labelledby="evidence-title" hidden>
+    <div class="intro page-heading"><h1 id="evidence-title">证据综述</h1><p>基于已选文献提取研究证据，并逐条核对原始来源。</p></div>
+    <div class="review-grid">
+      <section id="review-content" class="review-content" aria-label="证据综述正文">
       <p class="note">AI 生成 · 基于 PubMed 摘要，用于科研信息辅助。请核对原文；不用于个体诊疗。</p>
       <button type="button" id="review-button" disabled>生成证据综述</button>
       <p id="review-status" role="status"></p>
       <button type="button" class="secondary" id="export-review" hidden>导出 Markdown</button>
       <div id="review-result"></div>
-    </aside>
-  </div>
+      </section>
+      <div id="review-selection"></div>
+    </div>
+  </section>
+  <dialog id="paper-detail" aria-labelledby="paper-detail-title">
+    <form method="dialog"><button type="submit" class="secondary">关闭</button></form>
+    <div id="paper-detail-content"></div>
+  </dialog>
 </main>
 <footer>数据来源为 NCBI PubMed。 <a href="https://www.ncbi.nlm.nih.gov/home/about/policies/">NCBI 使用政策与摘要版权 ↗</a></footer>
   </div>

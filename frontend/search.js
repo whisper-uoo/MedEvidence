@@ -3,6 +3,7 @@ const byId = id => document.getElementById(id);
 const form = byId('search');
 const results = byId('results');
 const status = byId('status');
+const homeStatus = byId('home-status');
 const reviewStatus = byId('review-status');
 const selected = new Map();
 let articles = [];
@@ -74,11 +75,27 @@ function renderSelected() {
   updateReviewButton();
 }
 
+function openPaper(article) {
+  const target = byId('paper-detail-content');
+  const heading = element('h2', article.title ?? '标题未收录');
+  heading.id = 'paper-detail-title';
+  const metadata = [article.journal, article.publicationDate, `PMID ${article.pmid}`,
+    article.doi && `DOI ${article.doi}`].filter(Boolean).join(' · ');
+  target.replaceChildren(heading, element('p', metadata, 'meta'));
+  if (article.authors.length) target.append(element('p', article.authors.join(', '), 'meta'));
+  target.append(pubmed(article.pmid, '查看 PubMed 原文 ↗'), element('h3', '摘要'),
+    element('p', article.abstractText ?? 'PubMed 未收录摘要。', 'abstract'));
+  byId('paper-detail').showModal();
+}
+
 function renderArticle(article) {
   const card = element('article');
   const head = element('div', '', 'article-head');
   const title = element('h3');
-  title.append(pubmed(article.pmid, article.title ?? '标题未收录'));
+  const detailButton = element('button', article.title ?? '标题未收录', 'paper-title');
+  detailButton.type = 'button';
+  detailButton.onclick = () => openPaper(article);
+  title.append(detailButton);
   const label = element('label', '', 'toggle');
   const checkbox = document.createElement('input');
   checkbox.type = 'checkbox';
@@ -113,7 +130,7 @@ function renderArticle(article) {
   const details = element('details');
   details.append(element('summary', article.abstractText ? '展开摘要' : '摘要未收录'),
     element('p', article.abstractText ?? 'PubMed 未提供此文献的摘要。', 'abstract'));
-  card.append(details);
+  card.append(details, pubmed(article.pmid, `PubMed · ${article.pmid} ↗`));
   return card;
 }
 
@@ -159,11 +176,13 @@ async function loadPage(request, page, newSearch) {
   searching = true;
   setBusy();
   status.textContent = '正在检索 PubMed…';
+  homeStatus.textContent = status.textContent;
   try {
     const body = await api('/literature/search', { ...request, page }, 75000);
     pageResult = body.data;
     lastRequest = { ...request, englishQuery: pageResult.englishQuery };
     question = request.query;
+    byId('active-question').textContent = question;
     articles = pageResult.articles;
     rankings = new Map(pageResult.rankings.map(rank => [rank.pmid, rank]));
     semanticOrder = null;
@@ -192,8 +211,11 @@ async function loadPage(request, page, newSearch) {
     byId('page-label').textContent = `第 ${pageResult.page} / ${pageCount} 页`;
     renderSelected();
     renderResults();
+    homeStatus.textContent = '';
+    if (newSearch && window.location.hash !== '#literature') window.location.hash = 'literature';
   } catch (error) {
     status.textContent = error.message + (articles.length ? ' 仍显示上一次检索结果。' : '');
+    homeStatus.textContent = status.textContent;
     if (error.code === 'ENGLISH_QUERY_REQUIRED') {
       byId('english-options').open = true;
       byId('english').focus();
@@ -209,16 +231,33 @@ function optionalYear(id) {
   return byId(id).value === '' ? undefined : Number(byId(id).value);
 }
 
-form.onsubmit = event => {
-  event.preventDefault();
-  loadPage({
-    query: byId('query').value.trim(),
-    englishQuery: byId('english').value.trim(),
+function searchFilters() {
+  return {
     limit: Number(byId('page-size').value),
     fromYear: optionalYear('from-year'),
     toYear: optionalYear('to-year'),
     publicationType: byId('publication-type').value,
+  };
+}
+
+form.onsubmit = event => {
+  event.preventDefault();
+  loadPage({
+    ...searchFilters(),
+    query: byId('query').value.trim(),
+    englishQuery: byId('english').value.trim(),
   }, 1, true);
+};
+
+byId('apply-filters').onclick = () => {
+  if (!lastRequest) {
+    window.location.hash = 'question';
+    byId('query').focus();
+    return;
+  }
+  const yearInputs = [byId('from-year'), byId('to-year')];
+  if (yearInputs.some(input => !input.reportValidity())) return;
+  loadPage({ ...lastRequest, ...searchFilters() }, 1, true);
 };
 
 byId('prev').onclick = () => loadPage(lastRequest, pageResult.page - 1, false);
@@ -227,6 +266,8 @@ byId('clear-selection').onclick = () => { selected.clear(); renderSelected(); re
 byId('edit-expression').onclick = () => {
   byId('english').value = pageResult.englishQuery;
   byId('english-options').open = true;
+  window.location.hash = 'question';
+  syncNavigation();
   byId('english').focus();
 };
 for (const example of document.querySelectorAll('.example')) {
@@ -396,11 +437,21 @@ byId('export-review').onclick = () => {
 };
 
 function syncNavigation() {
-  const section = window.location.hash || '#question';
+  const pages = ['question', 'literature', 'review'];
+  const section = window.location.hash.slice(1);
+  const active = pages.includes(section) ? section : 'question';
+  for (const id of pages) byId(id).hidden = id !== active;
+  const selection = byId('reading-tools');
+  const parent = byId(active === 'review' ? 'review-selection' : 'browse-grid');
+  if (selection.parentElement !== parent) parent.append(selection);
+  byId('view-review').hidden = active === 'review';
   for (const link of document.querySelectorAll('.nav-list a')) {
-    if (link.getAttribute('href') === section) link.setAttribute('aria-current', 'location');
+    if (link.getAttribute('href') === '#' + active) link.setAttribute('aria-current', 'page');
     else link.removeAttribute('aria-current');
   }
 }
-window.addEventListener('hashchange', syncNavigation);
+window.addEventListener('hashchange', () => {
+  syncNavigation();
+  window.scrollTo({ top: 0, behavior: 'instant' });
+});
 syncNavigation();

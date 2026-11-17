@@ -110,3 +110,35 @@ article:has(details[open]) .preview { display: none; }
   .nav-list a { padding: .35rem .55rem; }
   html { scroll-padding-top: 6rem; }
 }
+
+.home-content { max-width: 68rem; margin: 2.4rem auto 0; }
+.home-content form { max-width: none; }
+.question-box { display: grid; gap: .6rem; padding: 1rem 1.2rem; border: 1px solid var(--line); border-radius: 1.05rem; background: #fff; box-shadow: 0 12px 26px #253b290b; }
+.question-box textarea { min-height: 5.4rem; border: 0; background: transparent; font-size: clamp(1rem, 2.1vw, 1.4rem); }
+.question-box .example { border-color: transparent; background: transparent; }
+.question-box .example:hover { background: #ecf3ee; }
+.home-shortcuts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.2rem; margin-top: 2.4rem; border-block: 1px solid var(--line); padding: .8rem 0; }
+.home-shortcuts a { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; padding: .8rem; text-decoration: none; border-radius: .6rem; }
+.home-shortcuts a:hover { background: #eaf0ec; }
+.home-shortcuts span { color: var(--muted); font-size: .82rem; }
+.home-shortcuts b { grid-area: 1 / 2 / 3 / 3; }
+.view-page { margin-top: 1.5rem; }
+.browse-query { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .65rem; padding-bottom: .8rem; margin-bottom: 1.25rem; border-bottom: 1px solid var(--line); }
+#active-question, .workspace-status { overflow-wrap: anywhere; color: var(--muted); }
+.link-button { display: inline-block; padding: .42rem .7rem; border-radius: .45rem; text-decoration: none; font-size: .85rem; }
+.link-button.primary { background: var(--accent); color: white; }
+.review-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, .38fr); gap: 1.4rem; }
+.review-content { background: white; border: 1px solid var(--line); border-radius: .8rem; padding: 1rem 1.2rem; min-width: 0; }
+.review-content .note:first-child { margin-top: 0; }
+.paper-title { all: unset; color: var(--ink); cursor: pointer; overflow-wrap: anywhere; }
+.paper-title:hover { color: var(--accent); text-decoration: underline; }
+.paper-title:focus-visible { outline: 3px solid #628473; outline-offset: 3px; }
+article > a { display: inline-block; margin-top: .45rem; font-size: .82rem; }
+#paper-detail { width: min(44rem, calc(100% - 2rem)); max-height: 84vh; border: 1px solid var(--line); border-radius: .8rem; padding: 1.2rem; color: var(--ink); }
+#paper-detail::backdrop { background: #17261e66; }
+#paper-detail form { display: flex; justify-content: flex-end; margin-bottom: .4rem; }
+#paper-detail-content a { display: inline-block; margin-block: .7rem; }
+@media (max-width: 780px) {
+  .review-grid, .home-shortcuts { grid-template-columns: minmax(0, 1fr); }
+  .home-content { margin-top: 1.2rem; }
+}
