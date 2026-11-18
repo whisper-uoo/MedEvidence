@@ -66,6 +66,8 @@ Spring Boot 读取继承的环境变量。直接运行 Maven、JAR 或 IntelliJ 
 
 供应商返回 `usage` 时，后端只记录输入、输出和总 Token 数；HTTP 错误只记录状态码。日志不记录密钥、请求头、请求正文或供应商原始响应。缺失的用量值保持未知。
 
+遇到 HTTP 403 时，请保留错误码和 request_id。百炼 `AccessDenied.Unpurchased` 表示服务未开通：使用主账号或具备 `AliyunBailianFullAccess` 权限的 RAM 账号登录百炼控制台，完成实名认证并确认调用地域。通用 Key 与 Token Plan 专属 Key 必须匹配对应端点。程序会记录脱敏错误码和 request_id，不会自动切换账户或端点。 [百炼错误码说明](https://help.aliyun.com/zh/model-studio/error-code-start)
+
 ### 初始化 MySQL
 
 使用 MySQL 8.x 或兼容实例。以管理员身份创建数据库，并设置应用账户。将密码示例替换为本地密码：

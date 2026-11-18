@@ -44,4 +44,35 @@ class ModelOutputTest {
             upstream.stop(0);
         }
     }
+    @Test
+    void explainsServiceActivationFailureAndRedactsRequestIdentifiers() throws Exception {
+        var upstream = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        var identifier = new java.util.concurrent.atomic.AtomicReference<>("test-request-123");
+        upstream.createContext("/v1/chat/completions", exchange -> {
+            try (exchange) {
+                var mapper = new ObjectMapper();
+                byte[] body = mapper.writeValueAsBytes(Map.of("error",
+                    Map.of("code", "AccessDenied.Unpurchased", "message", "Private upstream content"),
+                    "request_id", identifier.get()));
+                exchange.sendResponseHeaders(403, body.length);
+                exchange.getResponseBody().write(body);
+            }
+        });
+        upstream.start();
+        try {
+            var client = new ModelClient(new ObjectMapper(),
+                "http://127.0.0.1:" + upstream.getAddress().getPort() + "/v1",
+                "sk-private-fixture", "mock", Duration.ofSeconds(2));
+            var failure = assertThrows(SearchProblem.class, client::verifyConnection);
+            assertEquals("AI_SERVICE_NOT_ACTIVATED", failure.code);
+            assertTrue(failure.getMessage().contains("test-request-123"));
+            assertFalse(failure.getMessage().contains("Private upstream content"));
+            identifier.set("sk-private-fixture");
+            var redacted = assertThrows(SearchProblem.class, client::verifyConnection);
+            assertFalse(redacted.getMessage().contains("sk-private-fixture"));
+            assertTrue(redacted.getMessage().contains("request_id=redacted"));
+        } finally {
+            upstream.stop(0);
+        }
+    }
 }

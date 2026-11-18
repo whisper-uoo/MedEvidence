@@ -78,7 +78,14 @@ final class ModelClient {
             pending = http.sendAsync(request, HttpResponse.BodyHandlers.ofString());
             var response = pending.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
             if (response.statusCode() != 200) {
-                LOG.warn("Model request failed: HTTP {}", response.statusCode());
+                var diagnostic = upstreamError(response);
+                LOG.warn("Model request failed: HTTP {}, code={}, request_id={}",
+                    response.statusCode(), diagnostic.code(), diagnostic.requestId());
+                if ("AccessDenied.Unpurchased".equals(diagnostic.code())) {
+                    throw new SearchProblem(BAD_GATEWAY, "AI_SERVICE_NOT_ACTIVATED",
+                        "百炼服务尚未开通或当前账户不具备调用资格。请用主账号或具有 AliyunBailianFullAccess 权限的 RAM 账号登录百炼控制台并完成实名认证。"
+                        + " 上游错误 " + diagnostic.code() + "，request_id=" + diagnostic.requestId());
+                }
             }
             if (response.statusCode() == 429) {
                 throw new SearchProblem(SERVICE_UNAVAILABLE, "AI_RATE_LIMITED", "模型服务请求受限。",
@@ -115,6 +122,31 @@ final class ModelClient {
             if (pending != null && !pending.isDone()) pending.cancel(true);
             slots.release();
         }
+    }
+
+    record UpstreamError(String code, String requestId) {}
+
+    private UpstreamError upstreamError(HttpResponse<String> response) {
+        String code = "unknown";
+        String id = response.headers().firstValue("x-request-id")
+            .or(() -> response.headers().firstValue("x-dashscope-request-id")).orElse("unknown");
+        try {
+            JsonNode root = modelJson.readTree(response.body());
+            if (root != null && root.isObject()) {
+                var error = root.has("error") ? root.path("error") : root;
+                code = error.path("code").asText("unknown");
+                id = root.path("request_id").asText(error.path("request_id").asText(id));
+            }
+        } catch (IOException ignored) {
+            // Non-JSON upstream errors still retain HTTP status and safe header identifiers.
+        }
+        return new UpstreamError(safeIdentifier(code), safeIdentifier(id));
+    }
+
+    private String safeIdentifier(String value) {
+        if (value.contains(key) || value.toLowerCase(Locale.ROOT).contains("sk-")
+            || !value.matches("[A-Za-z0-9._:-]{1,128}")) return "redacted";
+        return value;
     }
 
     static void logUsage(JsonNode usage) {
