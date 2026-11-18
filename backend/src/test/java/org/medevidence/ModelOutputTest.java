@@ -17,8 +17,10 @@ class ModelOutputTest {
         var mapper = new ObjectMapper();
         var upstream = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         var response = new java.util.concurrent.atomic.AtomicReference<>("");
+        var requestBody = new java.util.concurrent.atomic.AtomicReference<>("");
         upstream.createContext("/v1/chat/completions", exchange -> {
             try (exchange) {
+                requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
                 byte[] bytes = response.get().getBytes(StandardCharsets.UTF_8);
                 exchange.sendResponseHeaders(200, bytes.length);
                 exchange.getResponseBody().write(bytes);
@@ -40,6 +42,10 @@ class ModelOutputTest {
                 () -> client.ask("Test", Map.of())).code);
             response.set("{\"choices\":[{\"message\":{\"content\":\"{\\\"ready\\\":true}\"}}]}");
             assertDoesNotThrow(client::verifyConnection);
+            assertFalse(mapper.readTree(requestBody.get()).has("enable_thinking"));
+            org.springframework.test.util.ReflectionTestUtils.setField(client, "enableThinking", "false");
+            assertDoesNotThrow(client::verifyConnection);
+            assertFalse(mapper.readTree(requestBody.get()).path("enable_thinking").booleanValue());
         } finally {
             upstream.stop(0);
         }

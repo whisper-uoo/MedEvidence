@@ -12,7 +12,11 @@ final class EvidenceEngine {
     private static final Pattern INLINE_PMID = Pattern.compile("(?i)\\bPMID\\s*[:：]?\\s*([0-9]+)");
     private final ModelClient model;
     private final int candidateLimit;
-    record Source(String pmid, String title, String abstractText) {}
+    record Source(String pmid, String title, String abstractText, List<String> quotes) {
+        Source(String pmid, String title, String abstractText) {
+            this(pmid, title, abstractText, quoteCandidates(abstractText));
+        }
+    }
     record Evidence(String pmid, String studyDesign, String finding, String limitation, String quote,
                     String population, String objective, String interpretation) {}
     record Point(String text, List<String> pmids) {}
@@ -58,9 +62,12 @@ final class EvidenceEngine {
         }
         JsonNode extracted = model.ask("""
             对每篇摘要独立提取证据。仅依据提供的摘要，使用中文描述研究对象、研究目的、研究方法、作者报告的发现、局限和模型解读。
-            未报告的内容使用“摘要未提供”，相关性只能描述为相关性。将作者报告的发现与模型解释分列；解读无法判断时明示。对每篇文献复制一段摘要原文作为 quote，
-            必须是逐字连续片段，最多 600 字符，不得翻译或增删。每个输入 PMID 恰好出现一次。
-            {"evidence":[{"pmid":"输入 PMID","population":"研究对象","objective":"目的","studyDesign":"研究方法","finding":"作者报告的发现","limitation":"局限","interpretation":"模型解读","quote":"摘要原文"}]}
+            未报告的内容使用“摘要未提供”，相关性只能描述为相关性。将作者报告的发现与模型解释分列。
+            每篇文献包含 quotes 原文片段数组。选择最支持主要发现的一个片段，用 quoteId 返回其从 0 开始的整数索引。
+            不要返回 quote 文本。后端将按索引取得原文，禁止改写或组合原文。
+            limitation 仅记录摘要明确报告的局限，否则填“摘要未提供”；推测的样本量或外推局限只可写入 interpretation。
+            每个输入 PMID 恰好出现一次。
+            {"evidence":[{"pmid":"输入 PMID","population":"研究对象","objective":"目的","studyDesign":"研究方法","finding":"作者报告的发现","limitation":"局限","interpretation":"模型解读","quoteId":0}]}
             """, Map.of("question", question, "articles", sources)).path("evidence");
         var evidence = validateEvidence(extracted, sources);
         JsonNode synthesis = model.ask("""
@@ -84,8 +91,18 @@ final class EvidenceEngine {
         for (var row : rows) {
             String id = required(row, "pmid", 12);
             var source = byId.remove(id);
-            String quote = required(row, "quote", 600);
-            if (source == null || !source.abstractText().contains(quote)) throw ModelClient.invalid();
+            if (source == null) throw ModelClient.invalid();
+            String quote;
+            if (row.has("quoteId")) {
+                var index = row.path("quoteId");
+                if (!index.isIntegralNumber() || !index.canConvertToInt() || index.intValue() < 0
+                    || index.intValue() >= source.quotes().size()) throw ModelClient.invalid();
+                quote = source.quotes().get(index.intValue());
+            } else {
+                // Validate previously supported quote text with the same exact-source requirement.
+                quote = required(row, "quote", 600);
+                if (!source.abstractText().contains(quote)) throw ModelClient.invalid();
+            }
             var allowed = Set.of(id);
             result.add(new Evidence(id, checkedText(row, "studyDesign", 600, allowed),
                 checkedText(row, "finding", 1000, allowed), checkedText(row, "limitation", 1000, allowed), quote,
@@ -126,6 +143,20 @@ final class EvidenceEngine {
             throw ModelClient.invalid();
         }
         return value.asText();
+    }
+
+    private static List<String> quoteCandidates(String abstractText) {
+        if (abstractText == null || abstractText.isBlank()) return List.of();
+        var candidates = new ArrayList<String>();
+        for (String paragraph : abstractText.split("\n+")) {
+            for (String sentence : paragraph.split("(?<=[.!?])\\s+")) {
+                for (int offset = 0; offset < sentence.length(); offset += 220) {
+                    String fragment = sentence.substring(offset, Math.min(offset + 220, sentence.length())).strip();
+                    if (!fragment.isEmpty()) candidates.add(fragment);
+                }
+            }
+        }
+        return List.copyOf(candidates);
     }
 
     private Source source(Article article, int max) {

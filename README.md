@@ -64,6 +64,8 @@ python3 -m http.server 5173 --bind 127.0.0.1 --directory frontend
 
 Spring Boot 读取继承的环境变量。直接运行 Maven、JAR 或 IntelliJ IDEA 时，`.env` 不会自动加载。请按上面的终端启动步骤导出 `.env`，或在 IDEA 的本地运行配置中设置环境变量。代码仓库只提交空值模板 `.env.example`。
 
+支持思考模式的千问模型可在本地设置 `AI_ENABLE_THINKING=false`，减少结构化抽取耗时。未设置时不发送此供应商参数。长摘要任务可将 `AI_TIMEOUT` 设为 `60s`。
+
 供应商返回 `usage` 时，后端只记录输入、输出和总 Token 数；HTTP 错误只记录状态码。日志不记录密钥、请求头、请求正文或供应商原始响应。缺失的用量值保持未知。
 
 遇到 HTTP 403 时，请保留错误码和 request_id。百炼 `AccessDenied.Unpurchased` 表示服务未开通：使用主账号或具备 `AliyunBailianFullAccess` 权限的 RAM 账号登录百炼控制台，完成实名认证并确认调用地域。通用 Key 与 Token Plan 专属 Key 必须匹配对应端点。程序会记录脱敏错误码和 request_id，不会自动切换账户或端点。 [百炼错误码说明](https://help.aliyun.com/zh/model-studio/error-code-start)
@@ -136,7 +138,7 @@ node --input-type=module --check < frontend/search.js
 | PubMed 检索 | 用真实 PubMed 验证中文术语扩展、真实 PMID、分页、类型与年份筛选和 BM25。 |
 | MySQL 与任务 | 在真实的隔离 MySQL 实例执行 001、002，验证状态、重复提交、失败记录、截止时间清理和应用重启后读取。 |
 | 重排序、提取及综述链路 | 使用真实 PubMed 文献和可控的模拟模型响应验证接口、引用与任务流程。模拟结果仅测试程序行为。 |
-| 真实模型 | 需在后端设置 `AI_BASE_URL`、`AI_MODEL`、`AI_API_KEY`，先测试连接，再用真实综述对照摘要逐条人工核查。 |
+| 真实模型 | 2026-11-18 使用百炼 `qwen3.8-flash` 验证连接、三篇文献重排、证据提取、综述、真实 MySQL 入库和重启后读取。使用 `AI_ENABLE_THINKING=false`、`AI_TIMEOUT=60s`。 |
 
 核查时记录 PMID 和支持各字段的摘要原句，分别检查研究对象、研究设计、结果、局限和推断范围。摘要若未提供某项信息，应标为无法核实。观察性研究中的关联不可直接作为因果结论。页面与导出均将 AI 综述标记为待人工核查。
 
@@ -145,3 +147,11 @@ node --input-type=module --check < frontend/search.js
 - PubMed ESearch 最多可翻阅前 10,000 篇。BM25 对标题加权，分数仅在当前候选页内可比较。BM25 和 AI 评分都用于排序，无法衡量概率、证据质量或消除漏召回。中文映射词表有限，请核对检索式。 [NCBI E-utilities 参数文档](https://www.ncbi.nlm.nih.gov/sites/books/NBK25499/)
 - AI 内容基于摘要，长摘要的模型输入可能被截短。结果标记缺摘要来源，并校验 PMID 与原文引句。人工仍需检查陈述是否受引用支持，尤其是因果和证据强度。AI 结果未经人工专家审核，仅用于科研信息辅助，不用于个体诊断或治疗决策。
 - 综述采用本机单用户模式，后端默认绑定回环地址，任务接口拒绝非回环请求。请勿通过公共反向代理转发这些任务接口。源码采用 MIT 许可证。自托管的 [Inter 字体](https://github.com/rsms/inter)和 [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) 使用 SIL Open Font License 1.1，许可文件位于 `frontend/assets/fonts/`。PubMed 摘要和文献内容遵循来源条款。 [NCBI 使用政策与摘要版权](https://www.ncbi.nlm.nih.gov/home/about/policies/)
+
+### 2026-11-18 百炼真实调用记录
+
+检索问题为“睡眠不足是否影响大学生记忆能力”。实际文献 PMID 为 25018659、28680341、36107513。重排与最终综述均通过服务端 PMID 校验；原文引句由后端提供候选片段，模型返回片段索引，后端保存对应的未改写原文。无效索引会被拒绝。旧版文本引句仍须通过逐字匹配校验。
+
+排查过程中出现一次重排非法输出、两次综述超时和两次抽取校验失败，失败任务保存在数据库。最终成功综述任务在应用重启后读回一致。最终成功任务的提取用量为输入 2103、输出 521，综合用量为输入 642、输出 805，总计 4071 Token。整个排查中已返回用量的请求累计 15749 Token；超时请求未返回用量，未将其视为零消耗，实际计费以百炼账单为准。
+
+人工对照发现，模型综合结论使用的“代偿性变化”并非原摘要明确报告的机制；“证据冲突”需要结合不同研究设计、终点和环境谨慎理解。因而本次通过的是接口、结构、引用关联和持久化流程验收，医学结论仍需人工逐条修订。

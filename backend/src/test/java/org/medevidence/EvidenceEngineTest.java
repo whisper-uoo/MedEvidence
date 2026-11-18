@@ -56,6 +56,19 @@ class EvidenceEngineTest {
     }
 
     @Test
+    void quoteIndexPreservesOriginalUnicodeAndRejectsInvalidReferences() throws Exception {
+        var sources = List.of(new EvidenceEngine.Source("1", "Title", "A narrow\u2009space remains exact."));
+        String row = """
+            [{"pmid":"1","population":"摘要未提供","objective":"Test","interpretation":"无法判断",
+              "studyDesign":"Test","finding":"Test","limitation":"摘要未提供","quoteId":0}]
+            """;
+        assertEquals(sources.get(0).abstractText(),
+            EvidenceEngine.validateEvidence(json.readTree(row), sources).get(0).quote());
+        assertThrows(SearchProblem.class, () ->
+            EvidenceEngine.validateEvidence(json.readTree(row.replace(":0", ":99")), sources));
+    }
+
+    @Test
     void synthesisRequiresAllowedNonemptyCitations() throws Exception {
         assertEquals(List.of("1"), EvidenceEngine.points(
             json.readTree("[{\"text\":\"Test\",\"pmids\":[\"1\"]}]"), Set.of("1")).get(0).pmids());
